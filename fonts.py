@@ -2,13 +2,11 @@
 fonts.py
 --------
 Handles brand-font embedding with a graceful, clearly-logged fallback, and
-the "font-scaling validation" safety check called for in the spec: if text
-has to be shrunk below MIN_ACCEPTABLE_FONT_SIZE to fit its box, that's raised
-as a ValidationWarning rather than silently rendered.
+the font-scaling validation safety check.
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import fitz
 
@@ -23,37 +21,43 @@ class ValidationWarning:
 
 class FontManager:
     """
-    Resolves which font family to embed (brand Century Gothic if the licensed
-    files are present, otherwise a bundled geometric-sans fallback), and
-    registers them once per fitz.Document via insert_font so every page
-    reuses the same embedded font object instead of re-embedding per field.
+    Resolves which font family to embed (brand Century Gothic if the files are
+    present, otherwise a bundled geometric-sans fallback), and registers them
+    once per document.
     """
 
     def __init__(self):
-        self.using_brand_font = os.path.exists(config.FONT_PRIMARY_REGULAR) and os.path.exists(
-            config.FONT_PRIMARY_BOLD
-        )
-        if self.using_brand_font:
+        has_regular = os.path.exists(config.FONT_PRIMARY_REGULAR)
+        has_bold = os.path.exists(config.FONT_PRIMARY_BOLD)
+
+        if has_regular:
             self.regular_path = config.FONT_PRIMARY_REGULAR
-            self.bold_path = config.FONT_PRIMARY_BOLD
             self.regular_name = "BrandRegular"
-            self.bold_name = "BrandBold"
+            self.using_brand_font = True
         else:
             self.regular_path = config.FONT_FALLBACK_REGULAR
-            self.bold_path = config.FONT_FALLBACK_BOLD
             self.regular_name = "FallbackRegular"
+            self.using_brand_font = False
+
+        if has_bold:
+            self.bold_path = config.FONT_PRIMARY_BOLD
+            self.bold_name = "BrandBold"
+        elif has_regular:
+            # Prefer brand regular metrics over a mismatched fallback bold at
+            # ~4.6pt body size — weight difference is subtle; width mismatch is not.
+            self.bold_path = config.FONT_PRIMARY_REGULAR
+            self.bold_name = "BrandBoldAsRegular"
+        else:
+            self.bold_path = config.FONT_FALLBACK_BOLD
             self.bold_name = "FallbackBold"
-            if not (os.path.exists(self.regular_path) and os.path.exists(self.bold_path)):
-                raise FileNotFoundError(
-                    "Neither Century Gothic nor the bundled fallback font could be found. "
-                    f"Checked: {config.FONT_PRIMARY_REGULAR}, {config.FONT_FALLBACK_REGULAR}"
-                )
+
+        if not (os.path.exists(self.regular_path) and os.path.exists(self.bold_path)):
+            raise FileNotFoundError(
+                "Neither Century Gothic nor the bundled fallback font could be found. "
+                f"Checked: {config.FONT_PRIMARY_REGULAR}, {config.FONT_FALLBACK_REGULAR}"
+            )
+
         self._registered_pages = set()
-        # fitz.get_text_length() only recognises the 14 built-in base fonts by
-        # name -- it has no way to know what "BrandRegular" refers to just
-        # because we insert_font()'d it into a page. For measurement we use a
-        # standalone fitz.Font built straight from the same font file, cached
-        # so we only construct it once per weight.
         self._measure_regular = fitz.Font(fontfile=self.regular_path)
         self._measure_bold = fitz.Font(fontfile=self.bold_path)
 
@@ -61,7 +65,6 @@ class FontManager:
         return self.bold_name if bold else self.regular_name
 
     def ensure_registered(self, page: "fitz.Page"):
-        """Embed the fonts into this page's document exactly once."""
         doc_id = id(page.parent)
         if doc_id in self._registered_pages:
             return
@@ -77,18 +80,6 @@ class FontManager:
         self, text: str, max_width: float, base_size: float, bold: bool, field_name: str,
         warnings: list, shrink_ratio_floor: float = 0.85,
     ) -> float:
-        """
-        Shrinks font size in 0.1pt steps until `text` fits `max_width`.
-
-        The template's native body copy runs ~4.6-4.7pt (this is a scaled-down
-        page coordinate space, not full document points), so an *absolute*
-        "flag below 8pt" rule -- as literally stated in the brief -- would
-        fire on every single field. The equivalent, actually-useful signal is
-        a *relative* one: if a field has to shrink more than
-        `shrink_ratio_floor` (default 15%) from its designed size to fit, the
-        wording is too long for its box and needs a human look, so we flag it
-        instead of silently rendering squashed text.
-        """
         size = base_size
         while size > 2.0 and self.text_length(text, size, bold) > max_width:
             size -= 0.1

@@ -1,16 +1,12 @@
 """
 bespoke.py
 ----------
-Everything about Page 13 ("Your Bespoke Package"), plus the overflow
-mechanism onto Page 14 ("Added Extras"):
+Everything about Page 13 ("Your Bespoke Package"), plus overflow onto Page 14:
 
-1. render_financials       -- inject guest count / cost / VAT / grand total
-2. render_upgrade_list     -- "Conditional Inclusion": only print upgrades the
-                               client actually selected, stacked with no gaps
-3. render_package_columns  -- "Stacking Algorithm": flow the three bespoke
-                               description columns, overflowing extra content
-                               onto a generated continuation page if the
-                               wording is too long to fit
+1. render_financials       -- guest count / cost / VAT / grand total
+2. render_upgrade_list     -- conditional inclusion of selected upgrades
+3. render_package_columns  -- stacking algorithm + overflow continuation
+4. apply_menu_links        -- rewrite / attach current-year menu URLs
 """
 
 import fitz
@@ -19,9 +15,6 @@ import config
 from pdf_ops import redact_zone, draw_text, draw_field
 
 
-# ---------------------------------------------------------------------------
-# 1. FINANCIALS
-# ---------------------------------------------------------------------------
 def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnings: list):
     page = doc[config.PAGE_BESPOKE_PACKAGE]
     font_mgr.ensure_registered(page)
@@ -45,35 +38,50 @@ def _money(value) -> str:
     return f"{float(value):,.2f}"
 
 
-# ---------------------------------------------------------------------------
-# 2. CONDITIONAL UPGRADE LIST
-# ---------------------------------------------------------------------------
 def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warnings: list):
     """
-    Clears the entire "Consider upgrading..." bullet zone and redraws only
-    the upgrades in `selected_upgrades` (a list/set of catalogue `id`s), in
-    catalogue order, stacked back-to-back with the template's original row
-    pitch -- so skipping "Live DJ" doesn't leave a blank line where it used
-    to be; everything below it simply shifts up.
+    Clears the upgrade bullet zone and redraws only selected upgrades in
+    catalogue order, stacked with no gaps.
     """
     cfg = config.UPGRADE_LIST
     page = doc[cfg["page"]]
     font_mgr.ensure_registered(page)
 
-    redact_zone(page, cfg["clear_zone"])
+    # clear_graphics=True removes orphaned underlines left by the template
+    # (e.g. orange "click here" rules) once the glyph text is wiped.
+    redact_zone(page, cfg["clear_zone"], clear_graphics=True)
 
     selected = set(selected_upgrades or [])
     chosen = [item for item in config.UPGRADE_CATALOGUE if item["id"] in selected]
 
     if not chosen:
-        return  # nothing selected -- leave the zone blank, that's correct
+        return
 
     cursor_y = cfg["first_baseline_y"]
-    bullet_font = font_mgr.font_name(False)
-    fontfile = font_mgr.regular_path
+    # Always draw the upgrade column with the bundled fallback font. The
+    # template-extracted Century Gothic subset reports advances for '£' but
+    # embeds a broken glyph for it; Poppins renders currency correctly.
+    import os
+    fallback_path = os.path.join(os.path.dirname(font_mgr.regular_path), "Fallback-Regular.ttf")
+    if not os.path.exists(fallback_path):
+        fallback_path = font_mgr.regular_path
+    page.insert_font(fontname="UpgradeRegular", fontfile=fallback_path)
+    bullet_font = "UpgradeRegular"
+    fontfile = fallback_path
+
+    class _FallbackMeasure:
+        def __init__(self):
+            self._font = fitz.Font(fontfile=fallback_path)
+
+        def text_length(self, text, size, bold):
+            return self._font.text_length(text, fontsize=size)
+
+    wrap_mgr = _FallbackMeasure()
 
     for item in chosen:
-        lines = _wrap(font_mgr, item["label"], cfg["text_size"], False, cfg["max_width"])
+        # Normalise hyphens/dashes so we never emit soft-hyphen artefacts
+        label = item["label"].replace("\u00ad", "-").replace("–", "-").replace("—", "-")
+        lines = _wrap(wrap_mgr, label, cfg["text_size"], False, cfg["max_width"])
         for i, line in enumerate(lines):
             if i == 0:
                 draw_text(page, (cfg["bullet_x"], cursor_y), "\u2022", bullet_font, cfg["bullet_size"], fontfile=fontfile)
@@ -91,37 +99,28 @@ def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warni
         )
 
 
-# ---------------------------------------------------------------------------
-# 3. STACKING ALGORITHM + OVERFLOW HANDLER
-# ---------------------------------------------------------------------------
 def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr, warnings: list):
     """
-    `package_wording` maps each column name in config.PACKAGE_COLUMNS to a
-    list of groups: [{"heading": "Entertainment", "items": ["...", "..."]}, ...]
-
-    Each column is flowed independently. If a column's content is too long
-    for Page 13, the overflow continues into the matching column position on
-    a generated continuation page inserted directly after Page 14 ("Added
-    Extras (continued)"), keeping the original Added Extras content intact.
+    Flow each package column. Overflow continues onto a continuation page
+    inserted after Page 14.
     """
-    # --- Pass 1: clear + flow every column onto Page 13 itself, collecting
-    # whatever doesn't fit. We deliberately do NOT insert the continuation
-    # page inside this loop: doc.new_page() shifts page indices and
-    # invalidates any fitz.Page object obtained before the insert, which
-    # would silently corrupt subsequent column edits on Page 13.
     overflow_by_column = {}
+
+    # Wipe the entire three-column package region once up front so leftover
+    # underlines / partial glyphs from the template cannot survive between columns.
+    page13 = doc[config.PAGE_BESPOKE_PACKAGE]
+    font_mgr.ensure_registered(page13)
+    redact_zone(page13, config.PACKAGE_CLEAR_ZONE, clear_graphics=True)
+
     for col_cfg in config.PACKAGE_COLUMNS:
         groups = package_wording.get(col_cfg["name"], [])
         if not groups:
             continue
 
-        page13 = doc[config.PAGE_BESPOKE_PACKAGE]  # re-fetch: safe even before any insert
+        page13 = doc[config.PAGE_BESPOKE_PACKAGE]  # re-fetch after any prior ops
         font_mgr.ensure_registered(page13)
 
         lines = _flatten_groups(groups, font_mgr, col_cfg["width"] - 6)
-
-        clear_bbox = (col_cfg["x"] - 2, col_cfg["top_y"] - 8, col_cfg["x"] + col_cfg["width"] + 10, col_cfg["max_y"] + 4)
-        redact_zone(page13, clear_bbox)
 
         overflow_index = _flow_lines(page13, col_cfg, lines, font_mgr)
         if overflow_index is not None:
@@ -130,7 +129,6 @@ def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr
     if not overflow_by_column:
         return False
 
-    # --- Pass 2: everything that didn't fit gets one shared continuation page ---
     continuation_page = _create_continuation_page(doc)
     for col_cfg in config.PACKAGE_COLUMNS:
         remaining = overflow_by_column.get(col_cfg["name"])
@@ -149,12 +147,56 @@ def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr
     return True
 
 
+def apply_menu_links(doc: "fitz.Document", menu_links: dict, warnings: list):
+    """
+    Attach / rewrite Page 13 menu and mood-board URIs.
+
+    `menu_links` keys match config.MENU_LINK_TARGETS (food_menu, street_food_menu,
+    mood_board). Values are absolute https URLs for the current season/year.
+    """
+    if not menu_links:
+        return
+
+    page = doc[config.PAGE_BESPOKE_PACKAGE]
+    existing = list(page.get_links())
+
+    for key, uri in menu_links.items():
+        if not uri:
+            continue
+        target = config.MENU_LINK_TARGETS.get(key)
+        if not target:
+            warnings.append(
+                type("ValidationWarning", (), {"field": "menu_links", "message": (
+                    f"Unknown menu link key '{key}'. Known: {list(config.MENU_LINK_TARGETS)}"
+                )})()
+            )
+            continue
+
+        click = fitz.Rect(target["click_bbox"])
+        # Remove any existing link whose rect overlaps this hotspot
+        for link in existing:
+            link_rect = fitz.Rect(link.get("from"))
+            if link_rect.intersects(click):
+                try:
+                    page.delete_link(link)
+                except Exception:
+                    pass
+
+        page.insert_link({
+            "kind": fitz.LINK_URI,
+            "from": click,
+            "uri": str(uri),
+        })
+
+
 def _flatten_groups(groups, font_mgr, width):
     lines = []
     for group in groups:
         heading = group.get("heading")
         if heading:
-            lines.append(("heading", heading))
+            wrapped_h = _wrap(font_mgr, heading, config.PACKAGE_TEXT_SIZE, False, width)
+            for i, ln in enumerate(wrapped_h):
+                lines.append(("heading" if i == 0 else "heading_cont", ln))
         for item_text in group.get("items", []):
             wrapped = _wrap(font_mgr, item_text, config.PACKAGE_TEXT_SIZE, False, width)
             for i, ln in enumerate(wrapped):
@@ -163,23 +205,22 @@ def _flatten_groups(groups, font_mgr, width):
 
 
 def _flow_lines(page, col_cfg, lines, font_mgr, start_index=0):
-    """
-    Draws lines starting at `start_index` until the column's `max_y` would be
-    exceeded. Returns the index of the first line that didn't fit, or None
-    if every line fit on this page.
-    """
     cursor_y = col_cfg["top_y"]
     fontname = font_mgr.font_name(False)
     fontfile = font_mgr.regular_path
     i = start_index
     while i < len(lines):
-        if cursor_y + config.PACKAGE_ROW_PITCH > col_cfg["max_y"]:
+        # cursor_y is the baseline; allow drawing while baseline itself is in range
+        if cursor_y > col_cfg["max_y"]:
             return i
         kind, text = lines[i]
-        indent = 0 if kind == "heading" else 7.4
+        is_heading = kind in ("heading", "heading_cont")
+        indent = 0 if is_heading else 7.4
         bullet_x = col_cfg["x"] + indent
         text_x = col_cfg["text_x"] + indent
-        draw_text(page, (bullet_x, cursor_y), "\u2022", fontname, config.PACKAGE_TEXT_SIZE, fontfile=fontfile)
+        # Only the first line of a heading/item gets a bullet (matches template)
+        if kind in ("heading", "item"):
+            draw_text(page, (bullet_x, cursor_y), "\u2022", fontname, config.PACKAGE_TEXT_SIZE, fontfile=fontfile)
         draw_text(page, (text_x, cursor_y), text, fontname, config.PACKAGE_TEXT_SIZE, fontfile=fontfile)
         cursor_y += config.PACKAGE_ROW_PITCH
         i += 1
@@ -188,21 +229,31 @@ def _flow_lines(page, col_cfg, lines, font_mgr, start_index=0):
 
 def _create_continuation_page(doc: "fitz.Document") -> "fitz.Page":
     """
-    Inserts a plain continuation page directly after Page 14 (Added Extras),
-    sized to match the template, with a minimal running header so it reads
-    as part of the document rather than a dropped-in blank sheet.
-
-    This is a functional placeholder: if WEOTT supplies a branded "overflow"
-    template (matching background art), swap the body of this function to
-    insert_pdf() that asset instead of fitz.new_page().
+    Insert a continuation page after Added Extras. Prefer a branded blank
+    from assets/vessels-style overflow if present; otherwise a minimal header.
     """
     template_rect = doc[config.PAGE_BESPOKE_PACKAGE].rect
     insert_at = config.PAGE_ADDED_EXTRAS + 1
-    page = doc.new_page(insert_at, width=template_rect.width, height=template_rect.height)
 
+    branded = os_path_overflow()
+    if branded:
+        src = fitz.open(branded)
+        try:
+            doc.insert_pdf(src, from_page=0, to_page=0, start_at=insert_at)
+            return doc[insert_at]
+        finally:
+            src.close()
+
+    page = doc.new_page(insert_at, width=template_rect.width, height=template_rect.height)
     page.insert_text((22.7, 30), "YOUR BESPOKE PACKAGE (CONTINUED)", fontsize=14, color=(0.13, 0.13, 0.13))
     page.draw_line((22.7, 35), (template_rect.width - 22.7, 35), color=(0.94, 0.55, 0.2), width=1.2)
     return page
+
+
+def os_path_overflow():
+    import os
+    path = os.path.join(config.BASE_DIR, "assets", "overflow_blank.pdf")
+    return path if os.path.exists(path) else None
 
 
 def _wrap(font_mgr, text: str, size: float, bold: bool, max_width: float):
