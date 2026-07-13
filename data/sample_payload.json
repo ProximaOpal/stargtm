@@ -1,0 +1,91 @@
+{
+  "lead": {
+    "proposal_ref": "WE.9128",
+    "prepared_by": "Katherine Bulaon",
+    "quote_date": "13 July 2026",
+    "client_name": "Jordan Kimathi",
+    "organisation": "Nairobi Fintech Collective",
+    "telephone": "020 4577 1190",
+    "email": "jordan@nairobifintech.co.ke",
+    "event_type": "Corporate Networking",
+    "event_date": "Fri 14 Aug 2026",
+    "event_timings": "18:00 - 22:00",
+    "guest_range": "50 - 70",
+    "guest_quote_n": "50",
+    "contact_name": "Katherine Bulaon",
+    "contact_title": "Client Relationship Manager",
+    "contact_phone": "020 8323 5827",
+    "contact_email": "sales@westendonthethames.com"
+  },
+  "calculations": {
+    "guests": 50,
+    "package_cost": 4600,
+    "vat": 920,
+    "grand_total": 5520
+  },
+  "selectedUpgrades": [
+    "drink_tokens",
+    "live_dj",
+    "photo_booth",
+    "logo_bunting"
+  ],
+  "packageWording": {
+    "venue_and_management": [
+      {
+        "heading": "4 hours private venue hire",
+        "items": [
+          "Embark begins at 17:45hrs",
+          "Boat departs at 18:00hrs",
+          "Returns to pier for 21:45hrs",
+          "Disembark completes at 22:00hrs",
+          "Complimentary pier stop can be added at any point during your cruise"
+        ]
+      },
+      {
+        "heading": "Full event management",
+        "items": [
+          "Assigned event planner",
+          "Event coordinators",
+          "Pier coordinator"
+        ]
+      }
+    ],
+    "entertainment_and_decor": [
+      {
+        "heading": "Entertainment",
+        "items": [
+          "Professional photographer with all digital images included",
+          "Personalised playlist",
+          "Live DJ for the full duration of the cruise, curated to brand"
+        ]
+      },
+      {
+        "heading": "Decorative items",
+        "items": [
+          "Fresh linen and floral centrepieces",
+          "Branded vessel flag with company logo",
+          "Bespoke logo bunting along the outdoor deck rail"
+        ]
+      }
+    ],
+    "stationery_and_catering": [
+      {
+        "heading": "Stationery",
+        "items": [
+          "Personalised digital invitation",
+          "A1 branded welcome aboard notice displayed on easel",
+          "River information cards"
+        ]
+      },
+      {
+        "heading": "Food and beverages",
+        "items": [
+          "Prosecco reception - 1 x glass per guest upon arrival",
+          "Mozzarella, sundried tomato and green olive skewer",
+          "Summer barbecue cooked fresh on the outdoor deck",
+          "Cash/card bar thereafter"
+        ]
+      }
+    ]
+  }
+}
