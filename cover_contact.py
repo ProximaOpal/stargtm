@@ -2,14 +2,14 @@
 cover_contact.py
 ----------------
 Page 1 (cover) and contact/RM sign-off handlers, plus house-style formatters.
-Field geometry comes from a measured TemplateProfile when provided.
+Uses batched redaction for speed and measured TemplateProfile geometry.
 """
 
 from datetime import datetime
 import re
 
 import config
-from pdf_ops import draw_field
+from pdf_ops import prepare_field_draw, draw_fields_batched
 
 
 _ORDINAL = {1: "st", 2: "nd", 3: "rd"}
@@ -36,6 +36,38 @@ def format_event_date(value: str) -> str:
             return f"{dt.strftime('%A')} {dt.day}{_ordinal(dt.day)} {dt.strftime('%B %Y')}"
         except ValueError:
             continue
+    return raw
+
+
+def format_event_date_compact(value: str) -> str:
+    """Shorter house style when the full weekday date won't fit the panel."""
+    raw = format_event_date(value)
+    if raw in ("", "TBC"):
+        return raw
+    # Try parse back from house style or ISO
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            dt = datetime.strptime(str(value).strip()[:10], fmt)
+            return f"{dt.strftime('%a')} {dt.day}{_ordinal(dt.day)} {dt.strftime('%b %Y')}"
+        except ValueError:
+            continue
+    # From already-formatted long date: Tuesday 14th July 2026 -> Tue 14th Jul 2026
+    m = re.match(
+        r"(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{1,2})(st|nd|rd|th)\s+"
+        r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})",
+        raw,
+    )
+    if m:
+        day_map = {
+            "Monday": "Mon", "Tuesday": "Tue", "Wednesday": "Wed", "Thursday": "Thu",
+            "Friday": "Fri", "Saturday": "Sat", "Sunday": "Sun",
+        }
+        mon_map = {
+            "January": "Jan", "February": "Feb", "March": "Mar", "April": "Apr",
+            "May": "May", "June": "Jun", "July": "Jul", "August": "Aug",
+            "September": "Sep", "October": "Oct", "November": "Nov", "December": "Dec",
+        }
+        return f"{day_map[m.group(1)]} {m.group(2)}{m.group(3)} {mon_map[m.group(4)]} {m.group(5)}"
     return raw
 
 
@@ -112,20 +144,37 @@ def fill_cover_page(doc, data: dict, font_mgr, warnings: list, profile=None):
     page = doc[page_index]
     font_mgr.ensure_registered(page)
     data = normalize_cover_lead(data)
+
+    prepared = []
     for field_name, spec in fields.items():
         if field_name not in data or not spec:
             continue
-        draw_field(page, spec, str(data[field_name]), font_mgr, warnings, field_name)
+        value = str(data[field_name])
+        # If event_date won't fit at designed size, use compact form before shrink
+        if field_name == "event_date":
+            max_w = spec.get("max_width", 56)
+            if font_mgr.text_length(value, spec["size"], spec.get("bold", False)) > max_w:
+                value = format_event_date_compact(data[field_name])
+        prepared.append(prepare_field_draw(spec, value, font_mgr, warnings, field_name))
+
+    draw_fields_batched(page, prepared, font_mgr, clear_graphics=False)
 
 
 def fill_contact_page(doc, data: dict, font_mgr, warnings: list, profile=None):
     fields = profile.contact_fields if profile and profile.contact_fields else config.CONTACT_FIELDS
+    # Group by page for batched apply
+    by_page: dict[int, list] = {}
     for field_name, spec in fields.items():
         if field_name not in data or not spec:
             continue
-        page = doc[spec.get("page", profile.page_contact if profile else config.PAGE_CONTACT)]
-        font_mgr.ensure_registered(page)
+        page_i = spec.get("page", profile.page_contact if profile else config.PAGE_CONTACT)
         value = str(data[field_name])
         if field_name == "contact_email":
             value = re.sub(r"^\s*E:\s*", "", value, flags=re.I)
-        draw_field(page, spec, value, font_mgr, warnings, field_name)
+        page = doc[page_i]
+        font_mgr.ensure_registered(page)
+        item = prepare_field_draw(spec, value, font_mgr, warnings, field_name)
+        by_page.setdefault(page_i, []).append(item)
+
+    for page_i, items in by_page.items():
+        draw_fields_batched(doc[page_i], items, font_mgr, clear_graphics=False)

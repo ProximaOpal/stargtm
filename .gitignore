@@ -4,8 +4,12 @@ __pycache__/
 venv/
 output*.pdf
 _out_*.pdf
+_perf_*.pdf
+_bench_*.pdf
+_qa_*.png
 _qa/
 *.egg-info/
 .env
 assets/templates/_scratch/
 assets/templates/_analysis/
+assets/templates/catalog/.profile_cache/

@@ -16,12 +16,22 @@ import json
 import os
 import tempfile
 
+from pathlib import Path
+
 from flask import Flask, request, send_file, jsonify
 
 from engine import build_proposal
 from catalog import get_catalog
+from measure import warm_profiles
 
 app = Flask(__name__)
+_BASE = Path(__file__).resolve().parent
+
+# Pre-measure all catalog templates so /generate stays fast under load
+try:
+    warm_profiles([str(_BASE / t["path"]) for t in get_catalog().templates])
+except Exception:
+    pass
 
 
 @app.get("/")

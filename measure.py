@@ -8,7 +8,11 @@ engine does not need one hardcoded config per PDF.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 import fitz
@@ -59,11 +63,59 @@ def _find_title_page(doc, *needles, min_size=12):
     return None
 
 
-def _value_after_label(spans, label_substr, *, value_same_line=True):
+def _span_field(sp, next_sp=None, widen=2.0, max_x1=None):
+    """
+    Build a redact/draw field from a value span.
+
+    Never expand into the next sibling span on the same line — cap x1 at
+    next_sp.bbox[0] - 0.6 when next_sp is provided. Also respect max_x1
+    (panel right edge) and set max_width from the available width.
+    """
+    x0, y0, x1, y1 = sp["bbox"]
+    x1 = x1 + widen
+
+    if next_sp is not None:
+        cap = next_sp["bbox"][0] - 0.6
+        if cap > x0:
+            x1 = min(x1, cap)
+
+    if max_x1 is not None and max_x1 > x0:
+        x1 = min(x1, max_x1)
+
+    # Ensure a usable minimum width without crossing caps already applied
+    min_x1 = x0 + 8.0
+    if next_sp is not None:
+        min_x1 = min(min_x1, next_sp["bbox"][0] - 0.6)
+    if max_x1 is not None:
+        min_x1 = min(min_x1, max_x1)
+    if min_x1 > x0:
+        x1 = max(x1, min_x1)
+
+    bbox = (round(x0, 1), round(y0, 1), round(x1, 1), round(y1, 1))
+    origin = (round(sp["origin"][0], 1), round(sp["origin"][1], 1))
+    bold = "Bold" in sp["font"] or "bold" in sp["font"].lower()
+    max_width = round(max(bbox[2] - bbox[0], 1.0), 1)
+    return dict(bbox=bbox, origin=origin, size=round(sp["size"], 2), bold=bold, max_width=max_width)
+
+
+def _next_same_line(spans, i):
+    """Return the next span on the same line as spans[i], or None."""
+    if i + 1 >= len(spans):
+        return None
+    nxt = spans[i + 1]
+    if abs(nxt["bbox"][1] - spans[i]["bbox"][1]) < 4:
+        return nxt
+    return None
+
+
+def _value_after_label(spans, label_substr, *, value_same_line=True, panel_right=None):
     """
     Locate the editable value span that follows a label such as
     'Event type |' or 'Prepared by '.
     Returns (bbox, origin, size, bold_hint) or None.
+
+    When panel_right is set it is used as max_x1 so values stay inside the
+    left (338) or right (467) cover panel.
     """
     label_substr_l = label_substr.lower()
     for i, sp in enumerate(spans):
@@ -73,115 +125,117 @@ def _value_after_label(spans, label_substr, *, value_same_line=True):
 
         # Case A: label ends with '|', value is the next span on similar y
         if "|" in text and text.strip().endswith("|"):
-            if i + 1 < len(spans):
-                nxt = spans[i + 1]
-                if abs(nxt["bbox"][1] - sp["bbox"][1]) < 4:
-                    return _span_field(nxt)
+            nxt = _next_same_line(spans, i)
+            if nxt is not None:
+                nxt2 = _next_same_line(spans, i + 1)
+                return _span_field(nxt, next_sp=nxt2, max_x1=panel_right)
 
         # Case B: 'Prepared by NAME' — name is next span
         if label_substr_l.startswith("prepared by") and text.strip().lower().endswith("prepared by"):
             if i + 1 < len(spans):
-                return _span_field(spans[i + 1])
+                nxt2 = _next_same_line(spans, i + 1)
+                return _span_field(spans[i + 1], next_sp=nxt2, max_x1=panel_right)
 
         # Case C: combined 'Label | value' in one span — redact only the value portion
         if "|" in text:
             left, right = text.split("|", 1)
             if right.strip():
-                # Approximate value bbox as the right side of this span
                 full = fitz.Rect(sp["bbox"])
-                # Split proportionally by character count (good enough for redact)
                 ratio = len(left) / max(len(text), 1)
                 x0 = full.x0 + full.width * ratio
-                bbox = (round(x0, 1), round(full.y0, 1), round(full.x1 + 20, 1), round(full.y1, 1))
+                x1 = full.x1 + 2.0
+                nxt = _next_same_line(spans, i)
+                if nxt is not None:
+                    x1 = min(x1, nxt["bbox"][0] - 0.6)
+                if panel_right is not None:
+                    x1 = min(x1, panel_right)
+                bbox = (round(x0, 1), round(full.y0, 1), round(x1, 1), round(full.y1, 1))
                 origin = (round(x0, 1), round(sp["origin"][1], 1))
                 bold = "Bold" in sp["font"] or "bold" in sp["font"].lower()
-                return dict(bbox=bbox, origin=origin, size=round(sp["size"], 2), bold=bold)
+                return dict(
+                    bbox=bbox,
+                    origin=origin,
+                    size=round(sp["size"], 2),
+                    bold=bold,
+                    max_width=round(max(bbox[2] - bbox[0], 1.0), 1),
+                )
 
         # Case D: bare label, next span is value
-        if i + 1 < len(spans) and abs(spans[i + 1]["bbox"][1] - sp["bbox"][1]) < 4:
-            return _span_field(spans[i + 1])
-    return None
-
-
-def _span_field(sp):
-    bbox = tuple(round(x, 1) for x in sp["bbox"])
-    # Widen bbox to the right so longer replacement values fit / clear leftovers
-    bbox = (bbox[0], bbox[1], max(bbox[2] + 25, bbox[0] + 40), bbox[3])
-    origin = (round(sp["origin"][0], 1), round(sp["origin"][1], 1))
-    bold = "Bold" in sp["font"] or "bold" in sp["font"].lower()
-    return dict(bbox=bbox, origin=origin, size=round(sp["size"], 2), bold=bold)
-
-
-def _find_date_span(spans):
-    """Find the quote-date span (e.g. '27 January 2026') before '| Quotation valid'."""
-    for i, sp in enumerate(spans):
-        if "quotation valid" in sp["text"].lower():
-            # previous span on same line is often the date, or same span before |
-            if "|" in sp["text"]:
-                left = sp["text"].split("|", 1)[0]
-                if any(ch.isdigit() for ch in left):
-                    return _span_field(sp)
-            if i > 0 and abs(spans[i - 1]["bbox"][1] - sp["bbox"][1]) < 4:
-                return _span_field(spans[i - 1])
-        # standalone date-like span near prepared-by block
-        t = sp["text"].strip()
-        months = ("January", "February", "March", "April", "May", "June",
-                  "July", "August", "September", "October", "November", "December")
-        if any(m in t for m in months) and any(ch.isdigit() for ch in t) and "valid" not in t.lower():
-            if sp["bbox"][0] > 200:  # cover right/left info panels
-                return _span_field(sp)
+        nxt = _next_same_line(spans, i)
+        if nxt is not None:
+            nxt2 = _next_same_line(spans, i + 1)
+            return _span_field(nxt, next_sp=nxt2, max_x1=panel_right)
     return None
 
 
 def _guest_quote_n(spans):
-    """The bold number in 'Quote based on a group of up to N guests'."""
+    """Bold guest count; redacts N + ' guests' and redraws both so 3-digit counts fit."""
     for i, sp in enumerate(spans):
         if "quote based on a group of up to" in sp["text"].lower():
             if i + 1 < len(spans) and spans[i + 1]["text"].strip().isdigit():
-                return _span_field(spans[i + 1])
-        # number may be embedded: '... up to 40 guests'
+                return _guest_quote_field(spans[i + 1], spans[i + 2] if i + 2 < len(spans) else None)
         if "up to" in sp["text"].lower() and "guest" in sp["text"].lower():
-            import re
             m = re.search(r"up to\s+(\d+)\s+guests?", sp["text"], re.I)
             if m:
-                # tight bbox around the digits — approximate mid-span
-                return _span_field(sp)
-    # fallback: look for short numeric span near guests line
+                return _span_field(sp, widen=0.5)
     for i, sp in enumerate(spans):
         if sp["text"].strip().isdigit() and len(sp["text"].strip()) <= 3:
             if i > 0 and "up to" in spans[i - 1]["text"].lower():
-                field = _span_field(sp)
-                field["bold"] = True
-                field["max_width"] = 8.0
-                return field
+                return _guest_quote_field(sp, spans[i + 1] if i + 1 < len(spans) else None)
     return None
+
+
+def _guest_quote_field(num_sp, guests_sp):
+    """
+    Cover the digit span plus the following ' guests' word so wider numbers
+    (e.g. 230) never clip the leading 'g'. Draw path re-inserts the suffix.
+    """
+    x0, y0, x1, y1 = num_sp["bbox"]
+    suffix = " guests"
+    if guests_sp and "guest" in guests_sp["text"].lower():
+        x1 = guests_sp["bbox"][2]
+        y0 = min(y0, guests_sp["bbox"][1])
+        y1 = max(y1, guests_sp["bbox"][3])
+        suffix = guests_sp["text"] if guests_sp["text"].startswith(" ") else f" {guests_sp['text'].lstrip()}"
+    # Digits may use up to ~11pt before the suffix is drawn after them
+    digit_w = 11.0
+    return dict(
+        bbox=(round(x0 - 0.3, 1), round(y0 - 0.2, 1), round(x1 + 0.3, 1), round(y1 + 0.2, 1)),
+        origin=(round(num_sp["origin"][0], 1), round(num_sp["origin"][1], 1)),
+        size=round(num_sp["size"], 2),
+        bold=True,
+        max_width=digit_w,
+        suffix=suffix,
+        suffix_bold=False,
+    )
 
 
 def measure_cover(page) -> dict:
     spans = _spans(page)
     fields = {}
+    RIGHT_PANEL = 467.0
+    LEFT_PANEL = 338.0
 
-    # --- Standard label → value fields ---
     # "No. of guests" is often split across spans ("No. " / "o" / "f guests |")
     label_map = {
-        "proposal_ref": ["Proposal/Quotation Ref"],
-        "client_name": ["Client Name"],
-        "organisation": ["Organisation"],
-        "telephone": ["Telephone"],
-        "email": ["Email"],
-        "event_type": ["Event type"],
-        "event_date": ["Event date requested"],
-        "event_timings": ["Event timings"],
-        "guest_range": ["No. of guests", "f guests |", "guests |"],
+        "proposal_ref": (["Proposal/Quotation Ref"], LEFT_PANEL),
+        "client_name": (["Client Name"], LEFT_PANEL),
+        "organisation": (["Organisation"], LEFT_PANEL),
+        "telephone": (["Telephone"], LEFT_PANEL),
+        "email": (["Email"], LEFT_PANEL),
+        "event_type": (["Event type"], RIGHT_PANEL),
+        "event_date": (["Event date requested"], RIGHT_PANEL),
+        "event_timings": (["Event timings"], RIGHT_PANEL),
+        "guest_range": (["No. of guests", "f guests |", "guests |"], RIGHT_PANEL),
     }
-    for key, labels in label_map.items():
+    for key, (labels, panel) in label_map.items():
         for label in labels:
-            found = _value_after_label(spans, label)
+            found = _value_after_label(spans, label, panel_right=panel)
             if found:
                 fields[key] = found
                 break
 
-    # Prepared by — handle both split and combined spans
+    # Prepared by — handle both split and combined spans; don't collide with quote_date
     for i, sp in enumerate(spans):
         text = sp["text"]
         low = text.lower()
@@ -189,12 +243,9 @@ def measure_cover(page) -> dict:
             continue
 
         # Combined: 'Prepared by Katherine Bulaon |'
-        if "prepared by" in low and "|" in text:
-            import re as _re
-            m = _re.search(r"prepared by\s+(.+?)\s*\|", text, _re.I)
+        if "|" in text:
+            m = re.search(r"prepared by\s+(.+?)\s*\|", text, re.I)
             if m:
-                name = m.group(1).strip()
-                # Approximate value bbox: from after 'Prepared by ' to before '|'
                 full = fitz.Rect(sp["bbox"])
                 pre = "Prepared by "
                 ratio0 = len(pre) / max(len(text), 1)
@@ -203,64 +254,86 @@ def measure_cover(page) -> dict:
                     ratio1 = 1.0
                 x0 = full.x0 + full.width * ratio0
                 x1 = full.x0 + full.width * ratio1
+                if LEFT_PANEL > x0:
+                    x1 = min(x1, LEFT_PANEL)
                 fields["prepared_by"] = dict(
-                    bbox=(round(x0, 1), round(full.y0, 1), round(x1 + 5, 1), round(full.y1, 1)),
+                    bbox=(round(x0, 1), round(full.y0, 1), round(x1, 1), round(full.y1, 1)),
                     origin=(round(x0, 1), round(sp["origin"][1], 1)),
                     size=round(sp["size"], 2),
                     bold=True,
+                    max_width=round(max(x1 - x0, 1.0), 1),
                 )
                 break
+
         # Split: 'Prepared by ' + 'Katherine Bulaon' + ' |'
         if text.strip().lower() in ("prepared by", "prepared by "):
+            months = (
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December",
+            )
             for j in range(i + 1, min(i + 4, len(spans))):
                 cand = spans[j]
                 t = cand["text"].strip()
                 if t.startswith("|") or t.lower().startswith("client") or t.lower().startswith("relationship"):
                     continue
-                # skip dates
-                months = ("January", "February", "March", "April", "May", "June",
-                          "July", "August", "September", "October", "November", "December")
+                # skip dates so we don't collide with quote_date
                 if any(m in t for m in months):
                     continue
                 if len(t) >= 4:
-                    f = _span_field(cand)
+                    nxt2 = spans[j + 1] if j + 1 < len(spans) else None
+                    f = _span_field(cand, next_sp=nxt2, max_x1=LEFT_PANEL)
                     f["bold"] = True
                     fields["prepared_by"] = f
                     break
             break
 
-    # Quote date: left panel date near prepared-by, NOT the event date on the right
+    # Quote date: left-panel date like "27 January 2026" (NOT weekday event dates)
+    months = (
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    )
+    weekdays = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
     for i, sp in enumerate(spans):
         t = sp["text"].strip()
-        months = ("January", "February", "March", "April", "May", "June",
-                  "July", "August", "September", "October", "November", "December")
         if any(m in t for m in months) and any(ch.isdigit() for ch in t):
             # left info panel
             if 220 < sp["bbox"][0] < 340 and "valid" not in t.lower() and "requested" not in t.lower():
-                # exclude weekday event dates like 'Saturday 2nd June...'
-                weekdays = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
                 if any(t.startswith(d) for d in weekdays):
                     continue
-                f = _span_field(sp)
+                # next_sp is typically "| Quotation valid..." — widen=0.5 preserves it
+                nxt = None
+                if i + 1 < len(spans) and abs(spans[i + 1]["bbox"][1] - sp["bbox"][1]) < 3:
+                    nxt = spans[i + 1]
+                f = _span_field(sp, next_sp=nxt, widen=0.5)
                 f["bold"] = True
                 fields["quote_date"] = f
                 break
+
     # Fallback: span immediately before '| Quotation valid'
     if "quote_date" not in fields:
         for i, sp in enumerate(spans):
             if "quotation valid" in sp["text"].lower() and i > 0:
                 prev = spans[i - 1]
                 if abs(prev["bbox"][1] - sp["bbox"][1]) < 4:
-                    f = _span_field(prev)
+                    if prev["text"].strip() in ("|", "| ") and i > 1:
+                        f = _span_field(spans[i - 2], next_sp=prev, widen=0.5)
+                    else:
+                        f = _span_field(prev, next_sp=sp, widen=0.5)
                     f["bold"] = True
                     fields["quote_date"] = f
                     break
 
     gqn = _guest_quote_n(spans)
     if gqn:
-        gqn["bold"] = True
-        gqn["max_width"] = gqn.get("max_width", 8.0)
         fields["guest_quote_n"] = gqn
+
+    # Guest ranges like "200 – 250" need more width than the template's "40-50"
+    if "guest_range" in fields:
+        gr = fields["guest_range"]
+        x0, y0, _, y1 = gr["bbox"]
+        x1 = min(RIGHT_PANEL, x0 + 28.0)
+        gr["bbox"] = (x0, y0, x1, y1)
+        gr["max_width"] = round(x1 - x0, 1)
 
     return fields
 
@@ -285,7 +358,13 @@ def measure_contact(page, page_index: int) -> dict:
                     if j + 1 < len(spans):
                         title = spans[j + 1]
                         if "manager" in title["text"].lower() or "relationship" in title["text"].lower():
-                            tf = _span_field(title)
+                            # Titles vary in length across RMs — expand past the
+                            # template placeholder (max_x1 is a cap, not a target).
+                            tf = _span_field(title, next_sp=None, widen=2.0)
+                            x0, y0, _, y1 = tf["bbox"]
+                            x1 = 160.0
+                            tf["bbox"] = (x0, y0, x1, y1)
+                            tf["max_width"] = round(x1 - x0, 1)
                             tf["bold"] = True
                             tf["page"] = page_index
                             # orange-ish title colour used in template
@@ -522,16 +601,98 @@ def measure_template(template_path: str) -> TemplateProfile:
         doc.close()
 
 
-# Simple in-process cache
+# In-process + on-disk profile cache (measurement is the slow part)
 _PROFILE_CACHE: dict[str, TemplateProfile] = {}
+_DISK_CACHE_DIR = Path(__file__).resolve().parent / "assets" / "templates" / "catalog" / ".profile_cache"
+
+
+def _profile_to_dict(profile: TemplateProfile) -> dict:
+    return {
+        "path": profile.path,
+        "pages": profile.pages,
+        "page_cover": profile.page_cover,
+        "page_vessel": profile.page_vessel,
+        "page_bespoke": profile.page_bespoke,
+        "page_extras": profile.page_extras,
+        "page_contact": profile.page_contact,
+        "cover_fields": profile.cover_fields,
+        "contact_fields": profile.contact_fields,
+        "financial_fields": profile.financial_fields,
+        "upgrade_list": profile.upgrade_list,
+        "package_columns": profile.package_columns,
+        "package_clear_zone": list(profile.package_clear_zone),
+        "menu_link_targets": profile.menu_link_targets,
+    }
+
+
+def _profile_from_dict(data: dict) -> TemplateProfile:
+    return TemplateProfile(
+        path=data["path"],
+        pages=data["pages"],
+        page_cover=data.get("page_cover", 0),
+        page_vessel=data.get("page_vessel"),
+        page_bespoke=data.get("page_bespoke"),
+        page_extras=data.get("page_extras"),
+        page_contact=data.get("page_contact"),
+        cover_fields=data.get("cover_fields") or {},
+        contact_fields=data.get("contact_fields") or {},
+        financial_fields=data.get("financial_fields") or {},
+        upgrade_list=data.get("upgrade_list") or {},
+        package_columns=data.get("package_columns") or [],
+        package_clear_zone=tuple(data.get("package_clear_zone") or (22.0, 156.0, 360.0, 263.8)),
+        menu_link_targets=data.get("menu_link_targets") or {},
+    )
+
+
+def _disk_cache_path(template_path: str) -> Path:
+    digest = hashlib.sha1(str(template_path).encode("utf-8")).hexdigest()[:16]
+    try:
+        mtime = int(Path(template_path).stat().st_mtime)
+    except OSError:
+        mtime = 0
+    return _DISK_CACHE_DIR / f"{digest}_{mtime}.json"
 
 
 def get_profile(template_path: str, *, force: bool = False) -> TemplateProfile:
     key = str(template_path)
-    if force or key not in _PROFILE_CACHE:
-        _PROFILE_CACHE[key] = measure_template(key)
-    return _PROFILE_CACHE[key]
+    if not force and key in _PROFILE_CACHE:
+        return _PROFILE_CACHE[key]
+
+    disk = _disk_cache_path(key)
+    if not force and disk.exists():
+        try:
+            data = json.loads(disk.read_text(encoding="utf-8"))
+            profile = _profile_from_dict(data)
+            _PROFILE_CACHE[key] = profile
+            return profile
+        except Exception:
+            pass
+
+    profile = measure_template(key)
+    _PROFILE_CACHE[key] = profile
+    try:
+        _DISK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        digest = disk.name.split("_")[0]
+        for old in _DISK_CACHE_DIR.glob(f"{digest}_*.json"):
+            if old != disk:
+                old.unlink(missing_ok=True)
+        disk.write_text(json.dumps(_profile_to_dict(profile)), encoding="utf-8")
+    except Exception:
+        pass
+    return profile
 
 
 def clear_profile_cache():
     _PROFILE_CACHE.clear()
+    if _DISK_CACHE_DIR.exists():
+        for f in _DISK_CACHE_DIR.glob("*.json"):
+            f.unlink(missing_ok=True)
+
+
+def warm_profiles(template_paths):
+    """Pre-measure a list of templates (call at app startup)."""
+    for path in template_paths:
+        try:
+            get_profile(path)
+        except Exception:
+            continue

@@ -16,6 +16,8 @@ from pdf_ops import redact_zone, draw_text, draw_field
 
 
 def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnings: list, profile=None):
+    from pdf_ops import prepare_field_draw, draw_fields_batched
+
     page_index = profile.page_bespoke if profile and profile.page_bespoke is not None else config.PAGE_BESPOKE_PACKAGE
     fields = profile.financial_fields if profile and profile.financial_fields else config.FINANCIAL_FIELDS
     page = doc[page_index]
@@ -27,13 +29,15 @@ def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnin
         "pkg_vat": _money(calculations.get("vat")),
         "pkg_total": _money(calculations.get("grand_total")),
     }
+    prepared = []
     for field_name, value in mapping.items():
         if value is None:
             continue
         spec = fields.get(field_name)
         if not spec:
             continue
-        draw_field(page, spec, str(value), font_mgr, warnings, field_name)
+        prepared.append(prepare_field_draw(spec, str(value), font_mgr, warnings, field_name))
+    draw_fields_batched(page, prepared, font_mgr, clear_graphics=False)
 
 
 def _money(value) -> str:

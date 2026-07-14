@@ -1,0 +1,89 @@
+{
+  "category": "corporate",
+  "event_type": "Networking Event",
+  "slot": "evening",
+  "lead": {
+    "proposal_ref": "WE.18809",
+    "prepared_by": "Katherine Bulaon",
+    "quote_date": "2026-07-14",
+    "client_name": "Christine Bowley",
+    "organisation": "JLL",
+    "telephone": "02082 832 553",
+    "email": "Christine.Bowley@jll.com",
+    "event_type": "Networking Event",
+    "event_date": "2026-07-14",
+    "event_timings": "10:00 - 18:00",
+    "guest_range": "200-250",
+    "guest_quote_n": "230",
+    "contact_name": "Katherine Bulaon",
+    "contact_title": "Client Relationship Manager",
+    "contact_phone": "020 8323 5827",
+    "contact_email": "sales@westendonthethames.com"
+  },
+  "vessel": "weott_i",
+  "calculations": {
+    "guests": 230,
+    "package_cost": 3755.74,
+    "vat": 751.15,
+    "grand_total": 4506.89
+  },
+  "selectedUpgrades": ["close_up_magician", "branded_vessel_flag"],
+  "packageWording": {
+    "venue_and_management": [
+      {
+        "heading": "4 hours private venue hire – timings can be amended upon request - current itinerary is as follows;",
+        "items": [
+          "Embark will begin at 12:45hrs",
+          "Boat departs at 13:00hrs",
+          "Returns to pier for 16:45hrs",
+          "Disembark completes at 17:00hrs",
+          "Complimentary pier stop can be added at any point during your cruise"
+        ]
+      },
+      {
+        "heading": "Full event management – before, during and after;",
+        "items": ["Assigned event planner", "Event coordinators", "Pier coordinator"]
+      }
+    ],
+    "entertainment_and_decor": [
+      {
+        "heading": "Entertainment;",
+        "items": [
+          "Professional photographer with all digital images included",
+          "Personalised playlist",
+          "PA system"
+        ]
+      },
+      {
+        "heading": "Decorative items;",
+        "items": [
+          "Fresh linen and floral centrepieces",
+          "Muji mist diffuser with summer fragrance",
+          "Deck chairs and side tables",
+          "Votive lanterns and fairy lights",
+          "Seasonal potted plants",
+          "Luxury lounge corner"
+        ]
+      }
+    ],
+    "stationery_and_catering": [
+      {
+        "heading": "Stationery;",
+        "items": [
+          "Personalised digital invitation",
+          "A1 branded (your logo) welcome aboard notice displayed on easel",
+          "River information cards"
+        ]
+      },
+      {
+        "heading": "Food and beverages;",
+        "items": [
+          "Pimm's/Prosecco reception - 1 x glass per guest upon arrival",
+          "Mozzarella, sundried tomato and green olive skewer",
+          "Light bites - click here to view your menu",
+          "Cash/card bar thereafter"
+        ]
+      }
+    ]
+  }
+}

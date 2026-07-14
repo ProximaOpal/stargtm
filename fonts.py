@@ -19,6 +19,17 @@ class ValidationWarning:
     message: str
 
 
+_FONT_MGR_SINGLETON = None
+
+
+def get_font_manager() -> "FontManager":
+    """Process-wide FontManager (font file IO + fitz.Font construction is costly)."""
+    global _FONT_MGR_SINGLETON
+    if _FONT_MGR_SINGLETON is None:
+        _FONT_MGR_SINGLETON = FontManager()
+    return _FONT_MGR_SINGLETON
+
+
 class FontManager:
     """
     Resolves which font family to embed (brand Century Gothic if the files are
@@ -57,7 +68,7 @@ class FontManager:
                 f"Checked: {config.FONT_PRIMARY_REGULAR}, {config.FONT_FALLBACK_REGULAR}"
             )
 
-        self._registered_pages = set()
+        self._registered_docs = set()
         self._measure_regular = fitz.Font(fontfile=self.regular_path)
         self._measure_bold = fitz.Font(fontfile=self.bold_path)
 
@@ -66,11 +77,15 @@ class FontManager:
 
     def ensure_registered(self, page: "fitz.Page"):
         doc_id = id(page.parent)
-        if doc_id in self._registered_pages:
+        if doc_id in self._registered_docs:
             return
         page.insert_font(fontname=self.regular_name, fontfile=self.regular_path)
         page.insert_font(fontname=self.bold_name, fontfile=self.bold_path)
-        self._registered_pages.add(doc_id)
+        self._registered_docs.add(doc_id)
+
+    def reset_doc_registry(self):
+        """Call after a document is closed so the next doc re-embeds fonts."""
+        self._registered_docs.clear()
 
     def text_length(self, text: str, size: float, bold: bool) -> float:
         font = self._measure_bold if bold else self._measure_regular
