@@ -63,6 +63,22 @@ def _find_title_page(doc, *needles, min_size=12):
     return None
 
 
+def _span_color(sp) -> tuple:
+    """Convert a PyMuPDF span color (int or sequence) to an RGB float tuple."""
+    c = sp.get("color", 0xFFFFFF)
+    if isinstance(c, (tuple, list)) and len(c) >= 3:
+        vals = tuple(float(x) for x in c[:3])
+        # Already 0..1 floats, or 0..255 ints
+        if max(vals) > 1.0:
+            return tuple(v / 255.0 for v in vals)
+        return vals
+    try:
+        c = int(c)
+    except (TypeError, ValueError):
+        return (1.0, 1.0, 1.0)
+    return (((c >> 16) & 255) / 255.0, ((c >> 8) & 255) / 255.0, (c & 255) / 255.0)
+
+
 def _span_field(sp, next_sp=None, widen=2.0, max_x1=None):
     """
     Build a redact/draw field from a value span.
@@ -95,7 +111,14 @@ def _span_field(sp, next_sp=None, widen=2.0, max_x1=None):
     origin = (round(sp["origin"][0], 1), round(sp["origin"][1], 1))
     bold = "Bold" in sp["font"] or "bold" in sp["font"].lower()
     max_width = round(max(bbox[2] - bbox[0], 1.0), 1)
-    return dict(bbox=bbox, origin=origin, size=round(sp["size"], 2), bold=bold, max_width=max_width)
+    return dict(
+        bbox=bbox,
+        origin=origin,
+        size=round(sp["size"], 2),
+        bold=bold,
+        max_width=max_width,
+        color=_span_color(sp),
+    )
 
 
 def _next_same_line(spans, i):
@@ -158,6 +181,7 @@ def _value_after_label(spans, label_substr, *, value_same_line=True, panel_right
                     size=round(sp["size"], 2),
                     bold=bold,
                     max_width=round(max(bbox[2] - bbox[0], 1.0), 1),
+                    color=_span_color(sp),
                 )
 
         # Case D: bare label, next span is value
@@ -207,6 +231,7 @@ def _guest_quote_field(num_sp, guests_sp):
         max_width=digit_w,
         suffix=suffix,
         suffix_bold=False,
+        color=_span_color(num_sp),
     )
 
 
@@ -262,6 +287,7 @@ def measure_cover(page) -> dict:
                     size=round(sp["size"], 2),
                     bold=True,
                     max_width=round(max(x1 - x0, 1.0), 1),
+                    color=_span_color(sp),
                 )
                 break
 
