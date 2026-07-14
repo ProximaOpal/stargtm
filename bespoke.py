@@ -15,8 +15,10 @@ import config
 from pdf_ops import redact_zone, draw_text, draw_field
 
 
-def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnings: list):
-    page = doc[config.PAGE_BESPOKE_PACKAGE]
+def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnings: list, profile=None):
+    page_index = profile.page_bespoke if profile and profile.page_bespoke is not None else config.PAGE_BESPOKE_PACKAGE
+    fields = profile.financial_fields if profile and profile.financial_fields else config.FINANCIAL_FIELDS
+    page = doc[page_index]
     font_mgr.ensure_registered(page)
 
     mapping = {
@@ -28,7 +30,9 @@ def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnin
     for field_name, value in mapping.items():
         if value is None:
             continue
-        spec = config.FINANCIAL_FIELDS[field_name]
+        spec = fields.get(field_name)
+        if not spec:
+            continue
         draw_field(page, spec, str(value), font_mgr, warnings, field_name)
 
 
@@ -38,12 +42,12 @@ def _money(value) -> str:
     return f"{float(value):,.2f}"
 
 
-def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warnings: list):
+def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warnings: list, profile=None):
     """
     Clears the upgrade bullet zone and redraws only selected upgrades in
     catalogue order, stacked with no gaps.
     """
-    cfg = config.UPGRADE_LIST
+    cfg = dict(profile.upgrade_list) if profile and profile.upgrade_list else dict(config.UPGRADE_LIST)
     page = doc[cfg["page"]]
     font_mgr.ensure_registered(page)
 
@@ -99,25 +103,27 @@ def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warni
         )
 
 
-def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr, warnings: list):
+def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr, warnings: list, profile=None):
     """
     Flow each package column. Overflow continues onto a continuation page
-    inserted after Page 14.
+    inserted after Added Extras.
     """
     overflow_by_column = {}
+    page_bespoke = profile.page_bespoke if profile and profile.page_bespoke is not None else config.PAGE_BESPOKE_PACKAGE
+    page_extras = profile.page_extras if profile and profile.page_extras is not None else config.PAGE_ADDED_EXTRAS
+    columns = profile.package_columns if profile and profile.package_columns else config.PACKAGE_COLUMNS
+    clear_zone = profile.package_clear_zone if profile and profile.package_clear_zone else config.PACKAGE_CLEAR_ZONE
 
-    # Wipe the entire three-column package region once up front so leftover
-    # underlines / partial glyphs from the template cannot survive between columns.
-    page13 = doc[config.PAGE_BESPOKE_PACKAGE]
+    page13 = doc[page_bespoke]
     font_mgr.ensure_registered(page13)
-    redact_zone(page13, config.PACKAGE_CLEAR_ZONE, clear_graphics=True)
+    redact_zone(page13, clear_zone, clear_graphics=True)
 
-    for col_cfg in config.PACKAGE_COLUMNS:
+    for col_cfg in columns:
         groups = package_wording.get(col_cfg["name"], [])
         if not groups:
             continue
 
-        page13 = doc[config.PAGE_BESPOKE_PACKAGE]  # re-fetch after any prior ops
+        page13 = doc[page_bespoke]
         font_mgr.ensure_registered(page13)
 
         lines = _flatten_groups(groups, font_mgr, col_cfg["width"] - 6)
@@ -129,8 +135,8 @@ def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr
     if not overflow_by_column:
         return False
 
-    continuation_page = _create_continuation_page(doc)
-    for col_cfg in config.PACKAGE_COLUMNS:
+    continuation_page = _create_continuation_page(doc, page_bespoke=page_bespoke, page_extras=page_extras)
+    for col_cfg in columns:
         remaining = overflow_by_column.get(col_cfg["name"])
         if not remaining:
             continue
@@ -147,33 +153,34 @@ def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr
     return True
 
 
-def apply_menu_links(doc: "fitz.Document", menu_links: dict, warnings: list):
+def apply_menu_links(doc: "fitz.Document", menu_links: dict, warnings: list, profile=None):
     """
     Attach / rewrite Page 13 menu and mood-board URIs.
 
-    `menu_links` keys match config.MENU_LINK_TARGETS (food_menu, street_food_menu,
+    `menu_links` keys match MENU_LINK_TARGETS (food_menu, street_food_menu,
     mood_board). Values are absolute https URLs for the current season/year.
     """
     if not menu_links:
         return
 
-    page = doc[config.PAGE_BESPOKE_PACKAGE]
+    page_index = profile.page_bespoke if profile and profile.page_bespoke is not None else config.PAGE_BESPOKE_PACKAGE
+    targets = profile.menu_link_targets if profile and profile.menu_link_targets else config.MENU_LINK_TARGETS
+    page = doc[page_index]
     existing = list(page.get_links())
 
     for key, uri in menu_links.items():
         if not uri:
             continue
-        target = config.MENU_LINK_TARGETS.get(key)
+        target = targets.get(key)
         if not target:
             warnings.append(
                 type("ValidationWarning", (), {"field": "menu_links", "message": (
-                    f"Unknown menu link key '{key}'. Known: {list(config.MENU_LINK_TARGETS)}"
+                    f"Unknown menu link key '{key}'. Known: {list(targets)}"
                 )})()
             )
             continue
 
         click = fitz.Rect(target["click_bbox"])
-        # Remove any existing link whose rect overlaps this hotspot
         for link in existing:
             link_rect = fitz.Rect(link.get("from"))
             if link_rect.intersects(click):
@@ -227,13 +234,15 @@ def _flow_lines(page, col_cfg, lines, font_mgr, start_index=0):
     return None
 
 
-def _create_continuation_page(doc: "fitz.Document") -> "fitz.Page":
+def _create_continuation_page(doc: "fitz.Document", page_bespoke=None, page_extras=None) -> "fitz.Page":
     """
     Insert a continuation page after Added Extras. Prefer a branded blank
-    from assets/vessels-style overflow if present; otherwise a minimal header.
+    from assets/overflow_blank.pdf if present; otherwise a minimal header.
     """
-    template_rect = doc[config.PAGE_BESPOKE_PACKAGE].rect
-    insert_at = config.PAGE_ADDED_EXTRAS + 1
+    page_bespoke = page_bespoke if page_bespoke is not None else config.PAGE_BESPOKE_PACKAGE
+    page_extras = page_extras if page_extras is not None else config.PAGE_ADDED_EXTRAS
+    template_rect = doc[page_bespoke].rect
+    insert_at = page_extras + 1
 
     branded = os_path_overflow()
     if branded:

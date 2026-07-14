@@ -3,6 +3,9 @@ __pycache__/
 .venv/
 venv/
 output*.pdf
+_out_*.pdf
 _qa/
 *.egg-info/
 .env
+assets/templates/_scratch/
+assets/templates/_analysis/

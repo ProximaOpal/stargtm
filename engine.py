@@ -1,23 +1,28 @@
 """
 engine.py
 ---------
-Dynamic PDF Proposal Orchestrator -- top-level entry point.
+Dynamic PDF Proposal Orchestrator -- supports all Corporate + Wedding templates.
 
 USAGE
-    python engine.py payload.json template.pdf output.pdf
+    python engine.py payload.json [template.pdf] output.pdf
 
-PAYLOAD SCHEMA (JSON)
+If template.pdf is omitted (2-arg form after payload), or the special token
+AUTO is passed, the engine resolves the template from:
+    payload.category + payload.event_type + payload.slot
+(or lead.event_type). See catalog.py.
+
+PAYLOAD (key additions)
     {
-      "lead": { ... cover + contact fields ... },
-      "calculations": { "guests", "package_cost", "vat", "grand_total" },
-      "selectedUpgrades": ["live_dj", ...],
-      "packageWording": { "venue_and_management": [...], ... },
-      "vessel": "weott_i" | "avon_tour" | "london_rose",
-      "menuLinks": {
-        "food_menu": "https://...",
-        "mood_board": "https://...",
-        "street_food_menu": "https://..."
-      }
+      "category": "corporate" | "wedding",
+      "event_type": "Summer Event",
+      "slot": "daytime" | "evening" | "any" | "above_12" | "below_12",
+      "template_id": "corporate/summer_event/any",   // optional explicit
+      "lead": { "event_type": "...", ... },
+      "calculations": {...},
+      "selectedUpgrades": [...],
+      "packageWording": {...},
+      "vessel": "weott_i",
+      "menuLinks": {...}
     }
 """
 
@@ -35,9 +40,11 @@ from bespoke import (
     apply_menu_links,
 )
 from vessel import swap_vessel_page
+from catalog import resolve_template, get_catalog
+from measure import get_profile
 
 
-def build_proposal(payload: dict, template_path: str, output_path: str) -> dict:
+def build_proposal(payload: dict, template_path: str | None, output_path: str) -> dict:
     warnings = []
     lead = payload.get("lead", {})
     calculations = payload.get("calculations", {})
@@ -46,39 +53,57 @@ def build_proposal(payload: dict, template_path: str, output_path: str) -> dict:
     vessel_id = payload.get("vessel") or lead.get("vessel")
     menu_links = payload.get("menuLinks") or {}
 
+    # Resolve template from event type when path is missing / AUTO
+    resolved = None
+    if not template_path or str(template_path).upper() in ("AUTO", "AUTO.PDF", "-"):
+        resolved = resolve_template(payload)
+        template_path = resolved["path"]
+        # Ensure cover event_type matches the selected template's canonical name
+        if "event_type" not in lead and resolved.get("event_type"):
+            lead = dict(lead)
+            lead["event_type"] = resolved["event_type"]
+            payload = dict(payload)
+            payload["lead"] = lead
+    else:
+        # Still record what would have been selected, for the report
+        try:
+            resolved = resolve_template(payload)
+        except Exception:
+            resolved = {"id": "explicit", "path": template_path, "matched_by": "cli_path"}
+
+    profile = get_profile(template_path)
+
     doc = fitz.open(template_path)
     font_mgr = FontManager()
 
-    # --- Page 9: vessel profile swap (before other edits; page indices stable) ---
-    if vessel_id:
-        swap_vessel_page(doc, vessel_id, warnings)
+    if vessel_id and profile.page_vessel is not None:
+        swap_vessel_page(doc, vessel_id, warnings, page_index=profile.page_vessel)
 
-    # --- Page 1: cover ---
-    fill_cover_page(doc, lead, font_mgr, warnings)
+    fill_cover_page(doc, lead, font_mgr, warnings, profile=profile)
+    render_financials(doc, calculations, font_mgr, warnings, profile=profile)
+    render_upgrade_list(doc, selected_upgrades, font_mgr, warnings, profile=profile)
 
-    # --- Page 13: financials ---
-    render_financials(doc, calculations, font_mgr, warnings)
-
-    # --- Page 13: conditional upgrade list ---
-    render_upgrade_list(doc, selected_upgrades, font_mgr, warnings)
-
-    # --- Page 13 -> 14: bespoke description stacking + overflow ---
     if package_wording:
-        render_package_columns(doc, package_wording, font_mgr, warnings)
+        render_package_columns(doc, package_wording, font_mgr, warnings, profile=profile)
 
-    # --- Page 13: menu / mood-board link URIs ---
     if menu_links:
-        apply_menu_links(doc, menu_links, warnings)
+        apply_menu_links(doc, menu_links, warnings, profile=profile)
 
-    # --- Page 16: contact / relationship manager sign-off ---
-    fill_contact_page(doc, lead, font_mgr, warnings)
+    fill_contact_page(doc, lead, font_mgr, warnings, profile=profile)
 
     doc.save(output_path, garbage=4, deflate=True)
     doc.close()
 
     return {
         "output_path": output_path,
+        "template_id": (resolved or {}).get("id"),
+        "template_path": template_path,
+        "template_matched_by": (resolved or {}).get("matched_by"),
+        "category": (resolved or {}).get("category"),
+        "event_type": (resolved or {}).get("event_type") or lead.get("event_type"),
+        "slot": (resolved or {}).get("slot"),
         "using_brand_font": font_mgr.using_brand_font,
+        "measured_cover_fields": sorted(profile.cover_fields.keys()),
         "warnings": [f"[{w.field}] {w.message}" for w in warnings],
         "page_count_final": _page_count(output_path),
     }
@@ -92,14 +117,30 @@ def _page_count(path: str) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python engine.py payload.json template.pdf output.pdf")
+    # Forms:
+    #   python engine.py payload.json output.pdf
+    #   python engine.py payload.json AUTO output.pdf
+    #   python engine.py payload.json template.pdf output.pdf
+    if len(sys.argv) == 3:
+        payload_path, output_path = sys.argv[1], sys.argv[2]
+        template_path = "AUTO"
+    elif len(sys.argv) == 4:
+        payload_path, template_path, output_path = sys.argv[1], sys.argv[2], sys.argv[3]
+    else:
+        print("Usage:")
+        print("  python engine.py payload.json output.pdf")
+        print("  python engine.py payload.json AUTO output.pdf")
+        print("  python engine.py payload.json template.pdf output.pdf")
+        print("\nKnown event types:")
+        cat = get_catalog()
+        for et in cat.list_event_types():
+            print(f"  - {et}  slots={cat.list_slots(et)}")
         sys.exit(1)
 
-    with open(sys.argv[1], encoding="utf-8") as f:
+    with open(payload_path, encoding="utf-8") as f:
         payload = json.load(f)
 
-    report = build_proposal(payload, sys.argv[2], sys.argv[3])
+    report = build_proposal(payload, template_path, output_path)
     print(json.dumps(report, indent=2))
     if report["warnings"]:
         print("\n⚠ VALIDATION WARNINGS -- recommend manual review before sending:", file=sys.stderr)

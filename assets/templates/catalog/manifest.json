@@ -1,0 +1,358 @@
+{
+  "version": 1,
+  "description": "WEOTT proposal templates indexed by category + event type + slot",
+  "templates": [
+    {
+      "id": "corporate/award_ceremony/daytime",
+      "category": "corporate",
+      "event_type": "Award Ceremony",
+      "event_slug": "award_ceremony",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/award_ceremony/daytime/template.pdf",
+      "aliases": [
+        "Award Ceremony",
+        "award ceremony",
+        "award_ceremony"
+      ]
+    },
+    {
+      "id": "corporate/award_ceremony/evening",
+      "category": "corporate",
+      "event_type": "Award Ceremony",
+      "event_slug": "award_ceremony",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/award_ceremony/evening/template.pdf",
+      "aliases": [
+        "Award Ceremony",
+        "award ceremony",
+        "award_ceremony"
+      ]
+    },
+    {
+      "id": "corporate/christmas_event/daytime",
+      "category": "corporate",
+      "event_type": "Christmas Event",
+      "event_slug": "christmas_event",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/christmas_event/daytime/template.pdf",
+      "aliases": [
+        "Christmas Event",
+        "christmas",
+        "christmas event",
+        "christmas_event"
+      ]
+    },
+    {
+      "id": "corporate/christmas_event/evening",
+      "category": "corporate",
+      "event_type": "Christmas Event",
+      "event_slug": "christmas_event",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/christmas_event/evening/template.pdf",
+      "aliases": [
+        "Christmas Event",
+        "christmas",
+        "christmas event",
+        "christmas_event"
+      ]
+    },
+    {
+      "id": "corporate/client_event/daytime",
+      "category": "corporate",
+      "event_type": "Client Event",
+      "event_slug": "client_event",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/client_event/daytime/template.pdf",
+      "aliases": [
+        "Client Event",
+        "client",
+        "client event",
+        "client_event"
+      ]
+    },
+    {
+      "id": "corporate/client_event/evening",
+      "category": "corporate",
+      "event_type": "Client Event",
+      "event_slug": "client_event",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/client_event/evening/template.pdf",
+      "aliases": [
+        "Client Event",
+        "client",
+        "client event",
+        "client_event"
+      ]
+    },
+    {
+      "id": "corporate/company_anniversary/daytime",
+      "category": "corporate",
+      "event_type": "Company Anniversary",
+      "event_slug": "company_anniversary",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/company_anniversary/daytime/template.pdf",
+      "aliases": [
+        "Company Anniversary",
+        "company anniversary",
+        "company_anniversary"
+      ]
+    },
+    {
+      "id": "corporate/company_anniversary/evening",
+      "category": "corporate",
+      "event_type": "Company Anniversary",
+      "event_slug": "company_anniversary",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/company_anniversary/evening/template.pdf",
+      "aliases": [
+        "Company Anniversary",
+        "company anniversary",
+        "company_anniversary"
+      ]
+    },
+    {
+      "id": "corporate/conference_or_workshop/daytime",
+      "category": "corporate",
+      "event_type": "Conference or Workshop",
+      "event_slug": "conference_or_workshop",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/conference_or_workshop/daytime/template.pdf",
+      "aliases": [
+        "Conference or Workshop",
+        "conference or workshop",
+        "conference workshop",
+        "conference_or_workshop",
+        "conference_workshop"
+      ]
+    },
+    {
+      "id": "corporate/conference_or_workshop/evening",
+      "category": "corporate",
+      "event_type": "Conference or Workshop",
+      "event_slug": "conference_or_workshop",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/conference_or_workshop/evening/template.pdf",
+      "aliases": [
+        "Conference or Workshop",
+        "conference or workshop",
+        "conference workshop",
+        "conference_or_workshop",
+        "conference_workshop"
+      ]
+    },
+    {
+      "id": "corporate/meeting/default",
+      "category": "corporate",
+      "event_type": "Meeting",
+      "event_slug": "meeting",
+      "slot": "default",
+      "path": "assets/templates/catalog/corporate/meeting/default/template.pdf",
+      "aliases": [
+        "Meeting",
+        "meeting"
+      ]
+    },
+    {
+      "id": "corporate/networking_event/daytime",
+      "category": "corporate",
+      "event_type": "Networking Event",
+      "event_slug": "networking_event",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/networking_event/daytime/template.pdf",
+      "aliases": [
+        "Corporate Networking",
+        "Networking",
+        "Networking Event",
+        "networking",
+        "networking event",
+        "networking_event"
+      ]
+    },
+    {
+      "id": "corporate/networking_event/evening",
+      "category": "corporate",
+      "event_type": "Networking Event",
+      "event_slug": "networking_event",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/networking_event/evening/template.pdf",
+      "aliases": [
+        "Corporate Networking",
+        "Networking",
+        "Networking Event",
+        "networking",
+        "networking event",
+        "networking_event"
+      ]
+    },
+    {
+      "id": "corporate/social_gathering/daytime",
+      "category": "corporate",
+      "event_type": "Social Gathering",
+      "event_slug": "social_gathering",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/social_gathering/daytime/template.pdf",
+      "aliases": [
+        "Social Gathering",
+        "social gathering",
+        "social_gathering"
+      ]
+    },
+    {
+      "id": "corporate/social_gathering/evening",
+      "category": "corporate",
+      "event_type": "Social Gathering",
+      "event_slug": "social_gathering",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/social_gathering/evening/template.pdf",
+      "aliases": [
+        "Social Gathering",
+        "social gathering",
+        "social_gathering"
+      ]
+    },
+    {
+      "id": "corporate/summer_event/any",
+      "category": "corporate",
+      "event_type": "Summer Event",
+      "event_slug": "summer_event",
+      "slot": "any",
+      "path": "assets/templates/catalog/corporate/summer_event/any/template.pdf",
+      "aliases": [
+        "Summer Event",
+        "summer",
+        "summer event",
+        "summer_event"
+      ]
+    },
+    {
+      "id": "corporate/team_building/daytime",
+      "category": "corporate",
+      "event_type": "Team Building",
+      "event_slug": "team_building",
+      "slot": "daytime",
+      "path": "assets/templates/catalog/corporate/team_building/daytime/template.pdf",
+      "aliases": [
+        "Team Building",
+        "team building",
+        "team_building"
+      ]
+    },
+    {
+      "id": "corporate/team_building/evening",
+      "category": "corporate",
+      "event_type": "Team Building",
+      "event_slug": "team_building",
+      "slot": "evening",
+      "path": "assets/templates/catalog/corporate/team_building/evening/template.pdf",
+      "aliases": [
+        "Team Building",
+        "team building",
+        "team_building"
+      ]
+    },
+    {
+      "id": "corporate/transfer/above_12",
+      "category": "corporate",
+      "event_type": "Transfer",
+      "event_slug": "transfer",
+      "slot": "above_12",
+      "path": "assets/templates/catalog/corporate/transfer/above_12/template.pdf",
+      "aliases": [
+        "Transfer",
+        "transfer"
+      ]
+    },
+    {
+      "id": "corporate/transfer/below_12",
+      "category": "corporate",
+      "event_type": "Transfer",
+      "event_slug": "transfer",
+      "slot": "below_12",
+      "path": "assets/templates/catalog/corporate/transfer/below_12/template.pdf",
+      "aliases": [
+        "Transfer",
+        "transfer"
+      ]
+    },
+    {
+      "id": "wedding/engagement_celebration/default",
+      "category": "wedding",
+      "event_type": "Engagement Celebration",
+      "event_slug": "engagement_celebration",
+      "slot": "default",
+      "path": "assets/templates/catalog/wedding/engagement_celebration/default/template.pdf",
+      "aliases": [
+        "Engagement Celebration",
+        "engagement celebration",
+        "engagement_celebration"
+      ]
+    },
+    {
+      "id": "wedding/wedding_anniversary_or_pre_wedding_party/any",
+      "category": "wedding",
+      "event_type": "Wedding Anniversary or Pre-Wedding Party",
+      "event_slug": "wedding_anniversary_or_pre_wedding_party",
+      "slot": "any",
+      "path": "assets/templates/catalog/wedding/wedding_anniversary_or_pre_wedding_party/any/template.pdf",
+      "aliases": [
+        "Wedding Anniversary or Pre-Wedding Party",
+        "wedding anniversary or pre wedding party",
+        "wedding anniversary or pre-wedding party",
+        "wedding anniversary pre wedding party",
+        "wedding_anniversary_or_pre_wedding_party",
+        "wedding_anniversary_pre_wedding_party"
+      ]
+    },
+    {
+      "id": "wedding/wedding_reception/any",
+      "category": "wedding",
+      "event_type": "Wedding Reception",
+      "event_slug": "wedding_reception",
+      "slot": "any",
+      "path": "assets/templates/catalog/wedding/wedding_reception/any/template.pdf",
+      "aliases": [
+        "Wedding",
+        "Wedding Reception",
+        "wedding",
+        "wedding reception",
+        "wedding_reception"
+      ]
+    },
+    {
+      "id": "wedding/wedding_transfer/any",
+      "category": "wedding",
+      "event_type": "Wedding Transfer",
+      "event_slug": "wedding_transfer",
+      "slot": "any",
+      "path": "assets/templates/catalog/wedding/wedding_transfer/any/template.pdf",
+      "aliases": [
+        "Wedding Transfer",
+        "wedding transfer",
+        "wedding_transfer"
+      ]
+    }
+  ],
+  "selection_rules": {
+    "required": [
+      "event_type"
+    ],
+    "optional": [
+      "category",
+      "slot",
+      "time_of_day",
+      "guest_quote_n"
+    ],
+    "slot_aliases": {
+      "day": "daytime",
+      "daytime": "daytime",
+      "evening": "evening",
+      "night": "evening",
+      "any": "any",
+      "default": "default"
+    },
+    "notes": [
+      "If slot is omitted, prefer 'any' then 'default' then 'daytime'.",
+      "For Transfer events, slot is auto-chosen from guest_quote_n (>=12 => above_12)."
+    ]
+  }
+}

@@ -1,46 +1,44 @@
 {
-  "category": "corporate",
-  "event_type": "Summer Event",
-  "slot": "any",
+  "category": "wedding",
+  "event_type": "Wedding Reception",
   "lead": {
-    "proposal_ref": "WE.9128",
+    "proposal_ref": "WE.9201",
     "prepared_by": "Katherine Bulaon",
-    "quote_date": "13 July 2026",
-    "client_name": "Jordan Kimathi",
-    "organisation": "Nairobi Fintech Collective",
-    "telephone": "020 4577 1190",
-    "email": "jordan@nairobifintech.co.ke",
-    "event_type": "Summer Event",
-    "event_date": "2026-08-14",
-    "event_timings": "18:00 - 22:00 (TBC)",
-    "guest_range": "50-70",
-    "guest_quote_n": "50",
+    "quote_date": "14 July 2026",
+    "client_name": "Alex & Sam Rivera",
+    "organisation": "Private",
+    "telephone": "07700 900123",
+    "email": "alex.sam@example.com",
+    "event_type": "Wedding Reception",
+    "event_date": "2026-09-12",
+    "event_timings": "13:00 - 17:00 (TBC)",
+    "guest_range": "60-80",
+    "guest_quote_n": "70",
     "contact_name": "Katherine Bulaon",
     "contact_title": "Client Relationship Manager",
     "contact_phone": "020 8323 5827",
     "contact_email": "sales@westendonthethames.com"
   },
-  "vessel": "weott_i",
+  "vessel": "london_rose",
   "calculations": {
-    "guests": 50,
-    "package_cost": 4600,
-    "vat": 920,
-    "grand_total": 5520
+    "guests": 70,
+    "package_cost": 6200,
+    "vat": 1240,
+    "grand_total": 7440
   },
-  "selectedUpgrades": ["drink_tokens", "live_dj", "photo_booth", "logo_bunting"],
+  "selectedUpgrades": ["live_dj", "photo_booth", "saxophonist"],
   "menuLinks": {
-    "food_menu": "https://westendonthethames.com/menus/summer-barbecue-2026",
-    "mood_board": "https://drive.google.com/file/d/14oh2y9yaorz4Rds8jDh6VQx1Q7bX2xzt/view"
+    "food_menu": "https://westendonthethames.com/menus/wedding-2026"
   },
   "packageWording": {
     "venue_and_management": [
       {
         "heading": "4 hours private venue hire – timings can be amended upon request - current itinerary is as follows;",
         "items": [
-          "Embark will begin at 17:45hrs",
-          "Boat departs at 18:00hrs",
-          "Returns to pier for 21:45hrs",
-          "Disembark completes at 22:00hrs",
+          "Embark will begin at 12:45hrs",
+          "Boat departs at 13:00hrs",
+          "Returns to pier for 16:45hrs",
+          "Disembark completes at 17:00hrs",
           "Complimentary pier stop can be added at any point during your cruise"
         ]
       },
@@ -55,15 +53,15 @@
         "items": [
           "Professional photographer with all digital images included",
           "Personalised playlist",
-          "Live DJ for the full duration of the cruise"
+          "Live DJ for the reception"
         ]
       },
       {
         "heading": "Decorative items;",
         "items": [
           "Fresh linen and floral centrepieces",
-          "Branded vessel flag with company logo",
-          "Bespoke logo bunting along the outdoor deck rail"
+          "Votive lanterns and fairy lights",
+          "Seasonal potted plants"
         ]
       }
     ],
@@ -72,7 +70,7 @@
         "heading": "Stationery;",
         "items": [
           "Personalised digital invitation",
-          "A1 branded (your logo) welcome aboard notice displayed on easel",
+          "A1 branded welcome aboard notice displayed on easel",
           "River information cards"
         ]
       },
@@ -80,8 +78,7 @@
         "heading": "Food and beverages;",
         "items": [
           "Prosecco reception - 1 x glass per guest upon arrival",
-          "Mozzarella, sundried tomato and green olive skewer",
-          "Summer barbecue cooked fresh on the outdoor deck - click here to view your menu",
+          "Wedding grazing table",
           "Cash/card bar thereafter"
         ]
       }

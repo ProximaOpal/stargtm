@@ -1,60 +1,80 @@
 # WEOTT Dynamic PDF Proposal Orchestrator
 
-A working implementation built and tested against the real 18-page template
-(`template.pdf`).
+Generates pixel-aligned proposal PDFs across **all Corporate and Wedding**
+templates. Event type (plus optional category/slot) selects the right PDF.
 
-## Run it
+## Quick start
 
 ```bash
-pip install pymupdf
-python engine.py data/sample_payload.json template.pdf output.pdf
+pip install -r requirements.txt
+python engine.py data/sample_payload.json AUTO output.pdf
+python engine.py data/sample_wedding_payload.json AUTO wedding.pdf
 ```
 
-## What's implemented
+## Event-type → template selection
 
-| Spec requirement | Status |
-|---|---|
-| Cover fields (Page 1) with house-style dates/timings | Done |
-| Century Gothic body text + `#323232` colour | Done (`assets/fonts/CenturyGothic-Regular.ttf`) |
-| Vessel page swap (Page 9) | Done — `assets/vessels/{weott_i,avon_tour,london_rose}.pdf` |
-| Bespoke package columns + itinerary (Page 13) | Done |
-| Financials (cost / VAT / total) | Done |
-| Conditional upgrade filtering | Done |
-| Menu / mood-board link rewrite | Done via `menuLinks` |
-| Contact / RM sign-off (Page 16) | Done — measured coordinates |
-| Redaction safety (images untouched; graphics preserved on financial cells) | Done |
-| Overflow continuation page | Done (optional branded `assets/overflow_blank.pdf`) |
+Pass any of:
 
-## Payload extras
+| Field | Example | Notes |
+|---|---|---|
+| `event_type` | `"Summer Event"` | Primary selector (also read from `lead.event_type`) |
+| `category` | `"corporate"` / `"wedding"` | Disambiguates shared names |
+| `slot` / `time_of_day` | `"daytime"` / `"evening"` / `"any"` | Day/evening variants |
+| `template_id` | `"corporate/networking_event/evening"` | Explicit override |
+| Transfer guests | `calculations.guests` | Auto-picks `above_12` / `below_12` |
+
+List everything the engine knows:
+
+```bash
+python -c "from catalog import get_catalog; c=get_catalog(); print(c.list_event_types())"
+```
+
+Or `GET /templates` when the Flask app is running.
+
+### Catalogued templates (24)
+
+**Corporate:** Award Ceremony, Christmas Event, Client Event, Company Anniversary,
+Conference or Workshop, Meeting, Networking Event, Social Gathering, Summer Event,
+Team Building, Transfer (above/below 12 guests) — with daytime/evening slots where present.
+
+**Wedding:** Engagement Celebration, Wedding Anniversary or Pre-Wedding Party,
+Wedding Reception, Wedding Transfer.
+
+Templates live under `assets/templates/catalog/` with `manifest.json`.
+
+## How it stays accurate across variants
+
+Cover / contact / finance / upgrade geometry is **measured per template at
+runtime** (`measure.py`), so the ~1pt drift between Summer / Wedding /
+Engagement covers does not break field injection.
+
+## Payload shape
 
 ```json
 {
+  "category": "corporate",
+  "event_type": "Networking Event",
+  "slot": "evening",
+  "lead": { "...cover + contact fields..." },
+  "calculations": { "guests": 50, "package_cost": 4600, "vat": 920, "grand_total": 5520 },
+  "selectedUpgrades": ["live_dj", "photo_booth"],
+  "packageWording": { "venue_and_management": [], "entertainment_and_decor": [], "stationery_and_catering": [] },
   "vessel": "weott_i",
-  "menuLinks": {
-    "food_menu": "https://…/summer-barbecue-2026",
-    "mood_board": "https://drive.google.com/…"
-  }
+  "menuLinks": { "food_menu": "https://..." }
 }
 ```
 
-Cover formatters accept ISO dates (`2026-08-14`) and normalise to
-`Friday 14th August 2026`, and timings like `18:00 - 22:00 (TBC)` to
-`18:00hrs – 22:00hrs (TBC)`.
-
-## Vessel profiles
-
-Replace the placeholder PDFs in `assets/vessels/` with the real single-page
-vessel profile PDFs (same page size as the template). The engine swaps
-Page 9 for the selected `vessel` id.
-
-## Brand bold
-
-Drop a licensed `CenturyGothic-Bold.ttf` into `assets/fonts/` to unlock true
-bold. Until then, bold fields reuse the regular brand face (better metric
-match than a mismatched fallback at ~4.6pt).
-
-## Re-measure coordinates
+## API
 
 ```bash
-python tools/inspect_page.py template.pdf 12
+python app.py
+# GET  /templates
+# POST /generate   (resolves template from event_type automatically)
+```
+
+## Rebuild catalog after adding PDFs
+
+```bash
+# unzip new packs into assets/templates/_scratch then:
+python tools/build_catalog.py
 ```
