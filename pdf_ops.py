@@ -79,6 +79,7 @@ def prepare_field_draw(spec: dict, text: str, font_mgr, warnings: list, field_na
         "color": color,
         "origin": (x, y),
         "bold": bold,
+        "deep_bold": bool(spec.get("deep_bold")),
     }
     suffix = spec.get("suffix")
     if suffix:
@@ -97,6 +98,18 @@ def draw_prepared(page, prepared: dict, font_mgr=None):
         color=prepared["color"],
         fontfile=prepared["fontfile"],
     )
+    # Slight horizontal echo thickens white finance figures without bloating glyphs
+    if prepared.get("deep_bold"):
+        x, y = prepared["origin"]
+        draw_text(
+            page,
+            (x + 0.18, y),
+            prepared["draw_str"],
+            prepared["fontname"],
+            prepared["size"],
+            color=prepared["color"],
+            fontfile=prepared["fontfile"],
+        )
     suffix = prepared.get("suffix")
     if not suffix:
         return

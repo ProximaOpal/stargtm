@@ -4,7 +4,7 @@ bespoke.py
 Everything about Page 13 ("Your Bespoke Package"), plus overflow onto Page 14:
 
 1. render_financials       -- guest count / cost / VAT / grand total
-2. render_upgrade_list     -- conditional inclusion of selected upgrades
+2. render_upgrade_list     -- no-op: keep full template marketing catalogue
 3. render_package_columns  -- stacking algorithm + overflow continuation
 4. apply_menu_links        -- rewrite / attach current-year menu URLs
 """
@@ -36,6 +36,11 @@ def render_financials(doc: "fitz.Document", calculations: dict, font_mgr, warnin
         spec = fields.get(field_name)
         if not spec:
             continue
+        # Force deep bold white for orange-table figures (template look)
+        spec = dict(spec)
+        spec["bold"] = True
+        spec["color"] = (1.0, 1.0, 1.0)
+        spec["deep_bold"] = True
         prepared.append(prepare_field_draw(spec, str(value), font_mgr, warnings, field_name))
     draw_fields_batched(page, prepared, font_mgr, clear_graphics=False)
 
@@ -48,107 +53,14 @@ def _money(value) -> str:
 
 def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warnings: list, profile=None):
     """
-    Clears ONLY the upgrade bullet zone and redraws selected upgrades in
-    catalogue order, stacked with no gaps.
+    Leave the template's full marketing upgrade catalogue intact.
 
-    The instructional header ("Consider upgrading your bespoke package to
-    the left with the below items...") is a permanent layout anchor: never
-    redacted, always Century Gothic Bold, and the first bullet always starts
-    UPGRADE_HEADER_GAP_PT below its last-line baseline — independent of which
-    upgrades are conditionally included.
+    The right-hand column ("Consider upgrading your bespoke package to the
+    left with the below items..." + the complete bullet list) is sales copy
+    and must remain on every proposal. Do not redact or conditionally trim it
+    based on selectedUpgrades / vessel / season.
     """
-    cfg = dict(profile.upgrade_list) if profile and profile.upgrade_list else dict(config.UPGRADE_LIST)
-    page = doc[cfg["page"]]
-    font_mgr.ensure_registered(page)
-
-    gap = float(getattr(config, "UPGRADE_HEADER_GAP_PT", 20.0))
-    header_baseline = cfg.get("header_baseline_y")
-    if header_baseline is None:
-        header_baseline = cfg.get("first_baseline_y", 104.2) - gap
-    header_bottom = cfg.get("header_bottom", header_baseline + 1.5)
-
-    # Clamp clear zone so it can never eat the protected header
-    cz = list(cfg.get("clear_zone", (360, 90, 500, 240)))
-    cz[1] = max(float(cz[1]), float(header_bottom) + 1.0)
-    cfg["clear_zone"] = tuple(cz)
-
-    # Stacking always starts a fixed offset below the header baseline
-    cursor_y = round(float(header_baseline) + gap, 1)
-    cfg["first_baseline_y"] = cursor_y
-
-    # clear_graphics=True removes orphaned underlines left by the template
-    # (e.g. orange "click here" rules) once the glyph text is wiped.
-    redact_zone(page, cfg["clear_zone"], clear_graphics=True)
-
-    # Ensure the instructional header survived conditional inclusion / redaction.
-    # If a prior clear wiped a wrapped line, restore the full brand wording.
-    _ensure_upgrade_header(page, cfg, font_mgr)
-
-    selected = set(selected_upgrades or [])
-    chosen = [item for item in config.UPGRADE_CATALOGUE if item["id"] in selected]
-
-    if not chosen:
-        return
-
-    # Brand Century Gothic for extras (matches template; avoids Poppins "stamp" look).
-    bullet_font = font_mgr.font_name(False)
-    fontfile = font_mgr.regular_path
-
-    for item in chosen:
-        # Normalise hyphens/dashes so we never emit soft-hyphen artefacts
-        label = (
-            item["label"]
-            .replace("\u00ad", "-")
-            .replace("\u2010", "-")
-            .replace("\u2011", "-")
-            .replace("–", "-")
-            .replace("—", "-")
-        )
-        lines = _wrap(font_mgr, label, cfg["text_size"], False, cfg["max_width"])
-        for i, line in enumerate(lines):
-            if i == 0:
-                draw_text(page, (cfg["bullet_x"], cursor_y), "\u2022", bullet_font, cfg["bullet_size"], fontfile=fontfile)
-            draw_text(page, (cfg["text_x"], cursor_y), line, bullet_font, cfg["text_size"], fontfile=fontfile)
-            cursor_y += cfg["row_pitch"]
-
-    bottom_limit = cfg["clear_zone"][3]
-    if cursor_y > bottom_limit:
-        warnings.append(
-            type("ValidationWarning", (), {"field": "upgrade_list", "message": (
-                f"{len(chosen)} selected upgrades overflow the upgrade panel by "
-                f"{round(cursor_y - bottom_limit, 1)}pt -- consider trimming the selection "
-                f"or shrinking row_pitch in config.UPGRADE_LIST."
-            )})()
-        )
-
-
-def _ensure_upgrade_header(page, cfg: dict, font_mgr):
-    """Keep the instructional header intact in Century Gothic Bold."""
-    text = page.get_text("text")
-    needs_restore = (
-        "consider upgrading" not in text.lower()
-        or "below items" not in text.lower()
-    )
-    if not needs_restore:
-        return
-
-    lines = cfg.get("header_lines") or [
-        "Consider upgrading your bespoke package to",
-        "the left with the below items...",
-    ]
-    x = cfg.get("header_x", 368.7)
-    size = cfg.get("header_size", 4.7)
-    color = cfg.get("header_color", config.TEXT_COLOR)
-    # Rebuild from last known baseline upward if the original spans were wiped
-    last_baseline = cfg.get("header_baseline_y", 84.2)
-    line_pitch = 5.6
-    start_baseline = last_baseline - line_pitch * (len(lines) - 1)
-
-    fontname = font_mgr.font_name(True)
-    fontfile = font_mgr.bold_path
-    for i, line in enumerate(lines):
-        y = round(start_baseline + i * line_pitch, 1)
-        draw_text(page, (x, y), line, fontname, size, color=color, fontfile=fontfile)
+    return
 
 
 def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr, warnings: list, profile=None):

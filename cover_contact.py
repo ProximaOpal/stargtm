@@ -155,6 +155,9 @@ def fill_cover_page(doc, data: dict, font_mgr, warnings: list, profile=None):
             max_w = spec.get("max_width", 56)
             if font_mgr.text_length(value, spec["size"], spec.get("bold", False)) > max_w:
                 value = format_event_date_compact(data[field_name])
+        # Always use template cover white — never body #323232
+        spec = dict(spec)
+        spec["color"] = getattr(config, "COVER_TEXT_COLOR", (1.0, 1.0, 1.0))
         prepared.append(prepare_field_draw(spec, value, font_mgr, warnings, field_name))
 
     draw_fields_batched(page, prepared, font_mgr, clear_graphics=False)

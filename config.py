@@ -32,6 +32,8 @@ MIN_ACCEPTABLE_FONT_SIZE = 8.0  # pt -- absolute floor kept for API compat
 
 # Template body text colour #323232 (not pure black)
 TEXT_COLOR = (50 / 255, 50 / 255, 50 / 255)
+# Cover panel copy is near-white on photo backgrounds (template RGB ~230,242,243).
+COVER_TEXT_COLOR = (230 / 255, 242 / 255, 243 / 255)
 # Orange "click here" link colour from template (0xEE7B31)
 TEXT_COLOR_ORANGE_LINK = (0xEE / 255, 0x7B / 255, 0x31 / 255)
 
@@ -48,21 +50,20 @@ PAGE_CONTACT = 15               # "Your Contact"
 # PAGE 1 -- COVER FIELDS
 # Baselines measured from template span origins (not bbox.y1 guesses).
 # ---------------------------------------------------------------------------
+# Cover fields — always near-white on the photo panels
 COVER_FIELDS = {
-    # Cover copy is near-white on photo backgrounds (not body #323232).
-    "proposal_ref":  dict(bbox=(284.4, 39.3, 340, 45.7), origin=(284.4, 44.2), size=4.63, bold=False, color=(1, 1, 1)),
-    "prepared_by":   dict(bbox=(256.8, 48.4, 295.6, 55.0), origin=(256.8, 53.4), size=4.63, bold=True, color=(1, 1, 1)),
-    "quote_date":    dict(bbox=(227.3, 67.1, 264.1, 73.7), origin=(227.3, 72.3), size=4.63, bold=True, color=(1, 1, 1)),
-    "client_name":   dict(bbox=(260.0, 82.9, 320, 89.2), origin=(260.0, 87.8), size=4.63, bold=False, color=(1, 1, 1)),
-    "organisation":  dict(bbox=(260.7, 92.2, 340, 98.5), origin=(260.7, 97.1), size=4.63, bold=False, color=(1, 1, 1)),
-    "telephone":     dict(bbox=(254.9, 101.6, 310, 107.9), origin=(254.9, 106.5), size=4.63, bold=False, color=(1, 1, 1)),
-    "email":         dict(bbox=(243.4, 110.9, 320, 117.2), origin=(243.4, 115.8), size=4.63, bold=False, color=(1, 1, 1)),
-    "event_type":    dict(bbox=(385.6, 39.8, 470, 46.2), origin=(385.6, 44.8), size=4.63, bold=False, color=(1, 1, 1)),
-    "event_date":    dict(bbox=(410.4, 47.0, 470, 53.4), origin=(410.4, 52.0), size=4.63, bold=False, color=(1, 1, 1)),
-    "event_timings": dict(bbox=(391.5, 113.1, 470, 119.4), origin=(391.5, 118.0), size=4.63, bold=False, color=(1, 1, 1)),
-    "guest_range":   dict(bbox=(391.0, 134.4, 420, 140.7), origin=(391.0, 139.3), size=4.63, bold=False, color=(1, 1, 1)),
-    # max_width = real gap before the static word "guests"
-    "guest_quote_n": dict(bbox=(435.5, 141.3, 441, 147.9), origin=(435.5, 146.5), size=4.63, bold=True, max_width=6.5, color=(1, 1, 1)),
+    "proposal_ref":  dict(bbox=(284.4, 39.3, 340, 45.7), origin=(284.4, 44.2), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "prepared_by":   dict(bbox=(256.8, 48.4, 295.6, 55.0), origin=(256.8, 53.4), size=4.63, bold=True, color=COVER_TEXT_COLOR),
+    "quote_date":    dict(bbox=(227.3, 67.1, 264.1, 73.7), origin=(227.3, 72.3), size=4.63, bold=True, color=COVER_TEXT_COLOR),
+    "client_name":   dict(bbox=(260.0, 82.9, 320, 89.2), origin=(260.0, 87.8), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "organisation":  dict(bbox=(260.7, 92.2, 340, 98.5), origin=(260.7, 97.1), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "telephone":     dict(bbox=(254.9, 101.6, 310, 107.9), origin=(254.9, 106.5), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "email":         dict(bbox=(243.4, 110.9, 320, 117.2), origin=(243.4, 115.8), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "event_type":    dict(bbox=(385.6, 39.8, 470, 46.2), origin=(385.6, 44.8), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "event_date":    dict(bbox=(410.4, 47.0, 470, 53.4), origin=(410.4, 52.0), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "event_timings": dict(bbox=(391.5, 113.1, 470, 119.4), origin=(391.5, 118.0), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "guest_range":   dict(bbox=(391.0, 134.4, 420, 140.7), origin=(391.0, 139.3), size=4.63, bold=False, color=COVER_TEXT_COLOR),
+    "guest_quote_n": dict(bbox=(435.5, 141.3, 441, 147.9), origin=(435.5, 146.5), size=4.63, bold=True, max_width=6.5, color=COVER_TEXT_COLOR),
 }
 
 # ---------------------------------------------------------------------------
