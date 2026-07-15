@@ -17,6 +17,8 @@ from typing import Optional
 
 import fitz
 
+import config
+
 
 @dataclass
 class TemplateProfile:
@@ -492,51 +494,103 @@ def measure_financials(page) -> dict:
 
 
 def measure_upgrade_list(page, page_index: int) -> dict:
+    """
+    Measure the Added Extras column while treating the instructional header
+    ('Consider upgrading your bespoke package to the left with the below
+    items...') as a permanent, never-redacted layout anchor.
+
+    Dynamic bullets always start UPGRADE_HEADER_GAP_PT below the header's
+    last-line baseline, regardless of which upgrades are selected.
+    """
     spans = _spans(page)
-    # Find "Consider upgrading" then first bullet below it
-    header_y = None
-    for sp in spans:
-        if "consider upgrading" in sp["text"].lower():
-            header_y = sp["bbox"][3]
-            break
+    header_spans = []
+    for i, sp in enumerate(spans):
+        if "consider upgrading" not in sp["text"].lower():
+            continue
+        header_spans.append(sp)
+        for j in range(i + 1, min(i + 5, len(spans))):
+            nxt = spans[j]
+            if nxt["bbox"][0] < 350:
+                break
+            if abs(nxt["bbox"][0] - sp["bbox"][0]) > 8:
+                break
+            if nxt["bbox"][1] > sp["bbox"][1] + 22:
+                break
+            low = nxt["text"].lower()
+            if nxt["text"].strip() in ("•", "\u2022") or low.startswith("drink") or low.startswith("unlimited"):
+                break
+            header_spans.append(nxt)
+            if "below items" in low or "items..." in low:
+                break
+        break
 
-    bullets = []
-    for sp in spans:
-        if header_y is not None and sp["bbox"][1] > header_y and sp["bbox"][0] > 350:
-            if sp["text"].strip() in ("•", "\u2022") or (
-                len(sp["text"].strip()) > 8 and sp["bbox"][0] > 360
-            ):
-                bullets.append(sp)
-
-    # Fallback geometry (Summer Event)
     cfg = dict(
         page=page_index,
-        clear_zone=(365, 88, 481, 240),
-        bullet_x=369.6,
-        text_x=375.3,
-        first_baseline_y=97.2,
-        row_pitch=8.4,
-        bullet_size=4.0,
-        text_size=4.7,
-        max_width=105,
+        clear_zone=tuple(config.UPGRADE_LIST["clear_zone"]),
+        bullet_x=config.UPGRADE_LIST["bullet_x"],
+        text_x=config.UPGRADE_LIST["text_x"],
+        first_baseline_y=config.UPGRADE_LIST["first_baseline_y"],
+        header_baseline_y=config.UPGRADE_LIST.get("header_baseline_y", 84.2),
+        header_bottom=config.UPGRADE_LIST.get("header_bottom", 85.6),
+        row_pitch=config.UPGRADE_LIST["row_pitch"],
+        bullet_size=config.UPGRADE_LIST["bullet_size"],
+        text_size=config.UPGRADE_LIST["text_size"],
+        max_width=config.UPGRADE_LIST["max_width"],
         bold=False,
+        header_protected=True,
+        header_lines=[
+            "Consider upgrading your bespoke package to",
+            "the left with the below items...",
+        ],
+        header_size=4.7,
+        header_color=config.TEXT_COLOR,
+        header_x=368.7,
     )
 
-    text_spans = [s for s in spans if s["bbox"][0] > 360 and s["bbox"][1] > (header_y or 85) and len(s["text"].strip()) > 5]
-    text_spans.sort(key=lambda s: s["bbox"][1])
-    if len(text_spans) >= 2:
-        cfg["text_x"] = round(text_spans[0]["bbox"][0], 1)
-        cfg["first_baseline_y"] = round(text_spans[0]["origin"][1], 1)
-        cfg["row_pitch"] = round(text_spans[1]["origin"][1] - text_spans[0]["origin"][1], 1) or 8.4
-        cfg["text_size"] = round(text_spans[0]["size"], 2)
-        cfg["clear_zone"] = (
-            360,
-            round((header_y or 85) + 2, 1),
-            500,
-            round(text_spans[-1]["bbox"][3] + 8, 1),
-        )
-        cfg["bullet_x"] = cfg["text_x"] - 5.7
+    if header_spans:
+        header_baseline = header_spans[-1]["origin"][1]
+        header_bottom = max(s["bbox"][3] for s in header_spans)
+        cfg["header_baseline_y"] = round(header_baseline, 1)
+        cfg["header_bottom"] = round(header_bottom, 1)
+        cfg["header_x"] = round(header_spans[0]["origin"][0], 1)
+        cfg["header_size"] = round(header_spans[0]["size"], 2)
+        cfg["header_color"] = _span_color(header_spans[0])
+        cfg["header_lines"] = [s["text"].rstrip() for s in header_spans]
+        if len(cfg["header_lines"]) == 1 and "below items" not in cfg["header_lines"][0].lower():
+            cfg["header_lines"] = [
+                "Consider upgrading your bespoke package to",
+                "the left with the below items...",
+            ]
 
+    gap = float(getattr(config, "UPGRADE_HEADER_GAP_PT", 20.0))
+    cfg["first_baseline_y"] = round(cfg["header_baseline_y"] + gap, 1)
+
+    text_spans = [
+        s for s in spans
+        if s["bbox"][0] > 360
+        and s["bbox"][1] > cfg["header_bottom"]
+        and len(s["text"].strip()) > 5
+        and "consider upgrading" not in s["text"].lower()
+        and "below items" not in s["text"].lower()
+    ]
+    text_spans.sort(key=lambda s: s["bbox"][1])
+    if text_spans:
+        cfg["text_x"] = round(text_spans[0]["bbox"][0], 1)
+        cfg["text_size"] = round(text_spans[0]["size"], 2)
+        cfg["bullet_x"] = round(cfg["text_x"] - 5.7, 1)
+        if len(text_spans) >= 2:
+            pitch = text_spans[1]["origin"][1] - text_spans[0]["origin"][1]
+            if pitch > 4:
+                cfg["row_pitch"] = round(pitch, 1)
+        bottom = max(s["bbox"][3] for s in text_spans)
+    else:
+        bottom = 240.0
+
+    # Clear ONLY the dynamic bullet zone — from just under the protected
+    # header through the last catalogue row. Starting later leaves orphan
+    # template bullets in the 20pt gap above the first stacked item.
+    clear_y0 = round(cfg["header_bottom"] + 1.0, 1)
+    cfg["clear_zone"] = (360.0, clear_y0, 500.0, round(max(bottom + 8.0, clear_y0 + 40), 1))
     return cfg
 
 

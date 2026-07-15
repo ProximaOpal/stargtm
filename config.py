@@ -20,10 +20,8 @@ VESSEL_DIR = os.path.join(BASE_DIR, "assets", "vessels")
 # ---------------------------------------------------------------------------
 # FONTS
 # ---------------------------------------------------------------------------
-# Brand-correct pairing. CenturyGothic-Regular.ttf is derived from the
-# template's embedded Century Gothic subset (full Latin coverage). Drop
-# licensed CenturyGothic-Bold.ttf here to unlock true bold; otherwise the
-# engine falls back to the bundled geometric-sans bold.
+# Brand-correct pairing. CenturyGothic-Regular.ttf + CenturyGothic-Bold.ttf
+# are derived from the template's embedded Century Gothic subsets.
 FONT_PRIMARY_REGULAR = os.path.join(FONT_DIR, "CenturyGothic-Regular.ttf")
 FONT_PRIMARY_BOLD = os.path.join(FONT_DIR, "CenturyGothic-Bold.ttf")
 
@@ -114,15 +112,26 @@ UPGRADE_CATALOGUE = [
 
 UPGRADE_LIST = dict(
     page=PAGE_BESPOKE_PACKAGE,
-    clear_zone=(365, 88, 481, 240),
+    # clear_zone MUST start below the full instructional header (never redact it)
+    clear_zone=(365, 90, 481, 240),
     bullet_x=369.6,
     text_x=375.3,
-    first_baseline_y=97.2,
+    # Measured from last header baseline + UPGRADE_HEADER_GAP_PT
+    first_baseline_y=104.2,
+    header_baseline_y=84.2,
+    header_bottom=85.6,
     row_pitch=8.4,
     bullet_size=4.0,
     text_size=4.7,
     max_width=105,
     bold=False,
+)
+
+# Permanent layout gap between the instructional header baseline and the first
+# Added Extras bullet. Conditional inclusion must never move the header.
+UPGRADE_HEADER_GAP_PT = 20.0
+UPGRADE_HEADER_TEXT = (
+    "Consider upgrading your bespoke package to the left with the below items..."
 )
 
 # ---------------------------------------------------------------------------

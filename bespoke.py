@@ -48,16 +48,41 @@ def _money(value) -> str:
 
 def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warnings: list, profile=None):
     """
-    Clears the upgrade bullet zone and redraws only selected upgrades in
+    Clears ONLY the upgrade bullet zone and redraws selected upgrades in
     catalogue order, stacked with no gaps.
+
+    The instructional header ("Consider upgrading your bespoke package to
+    the left with the below items...") is a permanent layout anchor: never
+    redacted, always Century Gothic Bold, and the first bullet always starts
+    UPGRADE_HEADER_GAP_PT below its last-line baseline — independent of which
+    upgrades are conditionally included.
     """
     cfg = dict(profile.upgrade_list) if profile and profile.upgrade_list else dict(config.UPGRADE_LIST)
     page = doc[cfg["page"]]
     font_mgr.ensure_registered(page)
 
+    gap = float(getattr(config, "UPGRADE_HEADER_GAP_PT", 20.0))
+    header_baseline = cfg.get("header_baseline_y")
+    if header_baseline is None:
+        header_baseline = cfg.get("first_baseline_y", 104.2) - gap
+    header_bottom = cfg.get("header_bottom", header_baseline + 1.5)
+
+    # Clamp clear zone so it can never eat the protected header
+    cz = list(cfg.get("clear_zone", (360, 90, 500, 240)))
+    cz[1] = max(float(cz[1]), float(header_bottom) + 1.0)
+    cfg["clear_zone"] = tuple(cz)
+
+    # Stacking always starts a fixed offset below the header baseline
+    cursor_y = round(float(header_baseline) + gap, 1)
+    cfg["first_baseline_y"] = cursor_y
+
     # clear_graphics=True removes orphaned underlines left by the template
     # (e.g. orange "click here" rules) once the glyph text is wiped.
     redact_zone(page, cfg["clear_zone"], clear_graphics=True)
+
+    # Ensure the instructional header survived conditional inclusion / redaction.
+    # If a prior clear wiped a wrapped line, restore the full brand wording.
+    _ensure_upgrade_header(page, cfg, font_mgr)
 
     selected = set(selected_upgrades or [])
     chosen = [item for item in config.UPGRADE_CATALOGUE if item["id"] in selected]
@@ -65,31 +90,21 @@ def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warni
     if not chosen:
         return
 
-    cursor_y = cfg["first_baseline_y"]
-    # Always draw the upgrade column with the bundled fallback font. The
-    # template-extracted Century Gothic subset reports advances for '£' but
-    # embeds a broken glyph for it; Poppins renders currency correctly.
-    import os
-    fallback_path = os.path.join(os.path.dirname(font_mgr.regular_path), "Fallback-Regular.ttf")
-    if not os.path.exists(fallback_path):
-        fallback_path = font_mgr.regular_path
-    page.insert_font(fontname="UpgradeRegular", fontfile=fallback_path)
-    bullet_font = "UpgradeRegular"
-    fontfile = fallback_path
-
-    class _FallbackMeasure:
-        def __init__(self):
-            self._font = fitz.Font(fontfile=fallback_path)
-
-        def text_length(self, text, size, bold):
-            return self._font.text_length(text, fontsize=size)
-
-    wrap_mgr = _FallbackMeasure()
+    # Brand Century Gothic for extras (matches template; avoids Poppins "stamp" look).
+    bullet_font = font_mgr.font_name(False)
+    fontfile = font_mgr.regular_path
 
     for item in chosen:
         # Normalise hyphens/dashes so we never emit soft-hyphen artefacts
-        label = item["label"].replace("\u00ad", "-").replace("–", "-").replace("—", "-")
-        lines = _wrap(wrap_mgr, label, cfg["text_size"], False, cfg["max_width"])
+        label = (
+            item["label"]
+            .replace("\u00ad", "-")
+            .replace("\u2010", "-")
+            .replace("\u2011", "-")
+            .replace("–", "-")
+            .replace("—", "-")
+        )
+        lines = _wrap(font_mgr, label, cfg["text_size"], False, cfg["max_width"])
         for i, line in enumerate(lines):
             if i == 0:
                 draw_text(page, (cfg["bullet_x"], cursor_y), "\u2022", bullet_font, cfg["bullet_size"], fontfile=fontfile)
@@ -105,6 +120,35 @@ def render_upgrade_list(doc: "fitz.Document", selected_upgrades, font_mgr, warni
                 f"or shrinking row_pitch in config.UPGRADE_LIST."
             )})()
         )
+
+
+def _ensure_upgrade_header(page, cfg: dict, font_mgr):
+    """Keep the instructional header intact in Century Gothic Bold."""
+    text = page.get_text("text")
+    needs_restore = (
+        "consider upgrading" not in text.lower()
+        or "below items" not in text.lower()
+    )
+    if not needs_restore:
+        return
+
+    lines = cfg.get("header_lines") or [
+        "Consider upgrading your bespoke package to",
+        "the left with the below items...",
+    ]
+    x = cfg.get("header_x", 368.7)
+    size = cfg.get("header_size", 4.7)
+    color = cfg.get("header_color", config.TEXT_COLOR)
+    # Rebuild from last known baseline upward if the original spans were wiped
+    last_baseline = cfg.get("header_baseline_y", 84.2)
+    line_pitch = 5.6
+    start_baseline = last_baseline - line_pitch * (len(lines) - 1)
+
+    fontname = font_mgr.font_name(True)
+    fontfile = font_mgr.bold_path
+    for i, line in enumerate(lines):
+        y = round(start_baseline + i * line_pitch, 1)
+        draw_text(page, (x, y), line, fontname, size, color=color, fontfile=fontfile)
 
 
 def render_package_columns(doc: "fitz.Document", package_wording: dict, font_mgr, warnings: list, profile=None):

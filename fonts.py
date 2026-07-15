@@ -30,6 +30,22 @@ def get_font_manager() -> "FontManager":
     return _FONT_MGR_SINGLETON
 
 
+def _font_embeds_digits(path: str) -> bool:
+    """True if insert_font/insert_text can round-trip ASCII digits (subset fonts often can't)."""
+    if not path or not os.path.exists(path):
+        return False
+    try:
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_font(fontname="Probe", fontfile=path)
+        page.insert_text((20, 40), "0123456789", fontname="Probe", fontsize=10)
+        text = page.get_text("text")
+        doc.close()
+        return all(ch in text for ch in "0123456789")
+    except Exception:
+        return False
+
+
 class FontManager:
     """
     Resolves which font family to embed (brand Century Gothic if the files are
@@ -50,12 +66,15 @@ class FontManager:
             self.regular_name = "FallbackRegular"
             self.using_brand_font = False
 
-        if has_bold:
+        if has_bold and _font_embeds_digits(config.FONT_PRIMARY_BOLD):
             self.bold_path = config.FONT_PRIMARY_BOLD
             self.bold_name = "BrandBold"
+        elif os.path.exists(config.FONT_FALLBACK_BOLD):
+            # Template-extracted CG Bold subsets often lack embeddable digit
+            # outlines — use Fallback Bold so finance cells stay deep/white.
+            self.bold_path = config.FONT_FALLBACK_BOLD
+            self.bold_name = "FallbackBold"
         elif has_regular:
-            # Prefer brand regular metrics over a mismatched fallback bold at
-            # ~4.6pt body size — weight difference is subtle; width mismatch is not.
             self.bold_path = config.FONT_PRIMARY_REGULAR
             self.bold_name = "BrandBoldAsRegular"
         else:
