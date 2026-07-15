@@ -155,12 +155,32 @@ def fill_cover_page(doc, data: dict, font_mgr, warnings: list, profile=None):
             max_w = spec.get("max_width", 56)
             if font_mgr.text_length(value, spec["size"], spec.get("bold", False)) > max_w:
                 value = format_event_date_compact(data[field_name])
-        # Always use template cover white — never body #323232
+        # Page 1 must stay pixel-perfect with the chosen template: measured
+        # span colour + Century Gothic only. Page-13 pure-white / Fallback-Bold
+        # styling must not leak onto the cover.
         spec = dict(spec)
-        spec["color"] = getattr(config, "COVER_TEXT_COLOR", (1.0, 1.0, 1.0))
+        spec["color"] = _cover_ink_from_template(spec.get("color"))
+        # Keep brand CG on cover even for "bold" fields (template-extracted CG
+        # Bold subsets can't re-embed; Fallback Bold reads as a different face).
+        want_weight = bool(spec.get("bold"))
+        spec["bold"] = False
+        spec["deep_bold"] = want_weight  # light echo approximates template bold
         prepared.append(prepare_field_draw(spec, value, font_mgr, warnings, field_name))
 
     draw_fields_batched(page, prepared, font_mgr, clear_graphics=False)
+
+
+def _cover_ink_from_template(color) -> tuple:
+    """
+    Cover ink must match the template PDF, not Page-13 pure white.
+
+    Catalog templates store panel copy as RGB(230,242,243). Re-inserting with
+    that exact triplet keeps edited values identical to static labels.
+    """
+    if color and isinstance(color, (tuple, list)) and len(color) >= 3:
+        return (float(color[0]), float(color[1]), float(color[2]))
+    # Same triplet measured from assets/templates/catalog/**/template.pdf covers
+    return (230 / 255, 242 / 255, 243 / 255)
 
 
 def fill_contact_page(doc, data: dict, font_mgr, warnings: list, profile=None):

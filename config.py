@@ -32,7 +32,8 @@ MIN_ACCEPTABLE_FONT_SIZE = 8.0  # pt -- absolute floor kept for API compat
 
 # Template body text colour #323232 (not pure black)
 TEXT_COLOR = (50 / 255, 50 / 255, 50 / 255)
-# Cover panel copy is near-white on photo backgrounds (template RGB ~230,242,243).
+# Cover panel ink as stored in catalog templates (RGB 230,242,243).
+# Page-13 pure white is separate — do not reuse that for the cover.
 COVER_TEXT_COLOR = (230 / 255, 242 / 255, 243 / 255)
 # Orange "click here" link colour from template (0xEE7B31)
 TEXT_COLOR_ORANGE_LINK = (0xEE / 255, 0x7B / 255, 0x31 / 255)
