@@ -1,12 +1,14 @@
 """
 engine.py
 ---------
-Dynamic PDF Proposal Orchestrator -- supports all Corporate + Wedding templates.
+Dynamic PDF Proposal Orchestrator -- supports all Corporate + Wedding templates
+plus optional manual insert selection (Meera MVP Priority 1).
 
 USAGE
     python engine.py payload.json [template.pdf] output.pdf
 
-Pass AUTO (or omit template) to resolve from event_type / category / slot.
+Pass AUTO (or omit template) to resolve from event_type / category / slot,
+or set payload.template_id for an explicit salesperson-selected template.
 """
 
 import json
@@ -26,6 +28,7 @@ from bespoke import (
 from vessel import swap_vessel_page
 from catalog import resolve_template, get_catalog
 from measure import get_profile
+from inserts import apply_inserts
 
 
 def build_proposal(payload: dict, template_path: str | None, output_path: str) -> dict:
@@ -37,6 +40,13 @@ def build_proposal(payload: dict, template_path: str | None, output_path: str) -
     package_wording = payload.get("packageWording", {})
     vessel_id = payload.get("vessel") or lead.get("vessel")
     menu_links = payload.get("menuLinks") or {}
+    selected_inserts = (
+        payload.get("selectedInserts")
+        or payload.get("inserts")
+        or payload.get("selected_inserts")
+        or []
+    )
+    prefer_manual = bool(payload.get("template_id") or payload.get("manual_template"))
 
     resolved = None
     auto = not template_path or str(template_path).upper() in ("AUTO", "AUTO.PDF", "-")
@@ -48,6 +58,8 @@ def build_proposal(payload: dict, template_path: str | None, output_path: str) -
             lead["event_type"] = resolved["event_type"]
             payload = dict(payload)
             payload["lead"] = lead
+        if prefer_manual and payload.get("template_id"):
+            resolved["matched_by"] = f"manual_template_id:{resolved.get('matched_by')}"
     else:
         resolved = {
             "id": "explicit",
@@ -65,9 +77,15 @@ def build_proposal(payload: dict, template_path: str | None, output_path: str) -
     font_mgr = get_font_manager()
     font_mgr.reset_doc_registry()
 
-    if vessel_id and profile.page_vessel is not None:
-        # Skip no-op swap when asking for the default WEOTT I already in most templates
-        if str(vessel_id).lower().replace(" ", "_") not in ("weott_i", "weott", "weotti", "weott1", ""):
+    # Vessel insert PDFs replace the vessel page; otherwise use legacy vessel swap.
+    if vessel_id and profile.page_vessel is not None and not selected_inserts:
+        if str(vessel_id).lower().replace(" ", "_") not in (
+            "weott_i",
+            "weott",
+            "weotti",
+            "weott1",
+            "",
+        ):
             swap_vessel_page(doc, vessel_id, warnings, page_index=profile.page_vessel)
 
     fill_cover_page(doc, lead, font_mgr, warnings, profile=profile)
@@ -82,8 +100,10 @@ def build_proposal(payload: dict, template_path: str | None, output_path: str) -
 
     fill_contact_page(doc, lead, font_mgr, warnings, profile=profile)
 
-    # Fastest practical save: skip deep GC + image recompress (templates are
-    # already optimized). garbage=0 / no deflate cuts hundreds of ms on 18pp PDFs.
+    insert_report = {"applied": [], "requested": [], "resolved": 0}
+    if selected_inserts:
+        insert_report = apply_inserts(doc, list(selected_inserts), warnings)
+
     doc.save(output_path, garbage=0, deflate=False)
     page_count = doc.page_count
     doc.close()
@@ -99,6 +119,7 @@ def build_proposal(payload: dict, template_path: str | None, output_path: str) -
         "slot": (resolved or {}).get("slot"),
         "using_brand_font": font_mgr.using_brand_font,
         "measured_cover_fields": sorted(profile.cover_fields.keys()),
+        "inserts": insert_report,
         "warnings": [f"[{w.field}] {w.message}" for w in warnings],
         "page_count_final": page_count,
         "timing_ms": {
